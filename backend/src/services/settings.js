@@ -13,7 +13,11 @@ export const SCHEMA = [
   { key: 'notifyApprover', label: '有人请假时通知审批人', type: 'boolean', default: true, help: '经平台的钉钉 / 飞书 / 企业微信发' },
   { key: 'annualRounding', label: '年假折算取整', type: 'select', default: 'floor', options: [{ value: 'floor', label: '不足 1 天不给（法定）' }, { value: 'half', label: '精确到半天' }] },
   { key: 'annualExtraDays', label: '公司福利年假（天/年）', type: 'number', default: 0, min: 0, max: 30, help: '在法定年假之外每年多给的天数，按同样方式折算' },
-  { key: 'carryOverMaxDays', label: '年假最多结转几天到下一年', type: 'number', default: 0, min: 0, max: 30 }
+  { key: 'carryOverMaxDays', label: '年假最多结转几天到下一年', type: 'number', default: 0, min: 0, max: 30 },
+  { key: 'contractWarnDays', label: '合同到期前几天提醒', type: 'number', default: 60, min: 7, max: 180, help: '劳动合同期满前要和员工确认续签与否；人员全景、画像、AI 助手的简报都按这个提醒' },
+  { key: 'leaderSeeContracts', label: '部门负责人能看下属的合同', type: 'boolean', default: true, help: '只能看，不能改；合同由人事管' },
+  { key: 'leaderSeeCost', label: '部门负责人能看下属的人员成本', type: 'boolean', default: true, help: '工资、社保、奖金等都算在内。关掉后只有人事能看' },
+  { key: 'oneOnOneCadenceDays', label: '1v1 建议间隔（天）', type: 'number', default: 30, min: 0, max: 180, help: '超过这么多天没有 1v1 会在人员全景里标出来；0 = 不提醒' }
 ]
 
 let cache = null

@@ -4,6 +4,7 @@
 //   员工：只看自己
 import { prisma } from '../lib/prisma.js'
 import { forbidden } from '../lib/http.js'
+import { getSettings } from './settings.js'
 
 export async function isHr(ctx) {
   if (!ctx.user) return false
@@ -52,6 +53,40 @@ export async function canSee(ctx, userId) {
   const s = await visibleScope(ctx)
   return s.all || s.ids.has(Number(userId))
 }
+
+/** 下属（不含本人）；人事返回 { all: true } */
+async function subordinates(ctx) {
+  const s = await visibleScope(ctx)
+  if (s.all) return s
+  s.ids.delete(ctx.user.id)
+  return s
+}
+
+/** 合同：人事看全部；负责人看下属（设置里能关）；每个人看自己的 */
+export async function contractScope(ctx) {
+  if (await isHr(ctx)) return { all: true, ids: null }
+  const ids = new Set([ctx.user.id])
+  if ((await getSettings()).leaderSeeContracts) for (const id of (await subordinates(ctx)).ids) ids.add(id)
+  return { all: false, ids }
+}
+
+/** 人员成本：人事看全部；负责人看下属（设置里能关）；本人看不到自己的 */
+export async function costScope(ctx) {
+  if (await isHr(ctx)) return { all: true, ids: null }
+  if (!(await getSettings()).leaderSeeCost) return { all: false, ids: new Set() }
+  return subordinates(ctx)
+}
+
+/** 能给谁记 1v1：人事给任何人，负责人给下属；不能给自己记 */
+export async function canLog1v1(ctx, userId) {
+  const uid = Number(userId)
+  if (uid === ctx.user.id) return false
+  const s = await visibleScope(ctx)
+  return s.all || s.ids.has(uid)
+}
+
+export const inScope = (scope, userId) => scope.all || scope.ids.has(Number(userId))
+export const scopeWhere = (scope, field = 'userId') => (scope.all ? {} : { [field]: { in: [...scope.ids] } })
 
 /** 能看团队（负责人或人事）才显示「团队」类页面 */
 export async function canSeeTeam(ctx) {

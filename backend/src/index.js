@@ -37,11 +37,11 @@ if (hasStatic) {
   app.use('/assets', (req, res) => res.status(404).end()) // 旧版本的文件名（发布后还开着的老页面）：404，不要回落到 index.html
 }
 
-// 退出：清掉本应用的会话，去平台登录页（换个账号登录后从工作台再打开就是新身份）。
+// 退出 / 换账号：清掉本应用的会话，再让平台也退出登录（以虎 One 0.6.1+ 的 /logout），换个账号登录后直接回到本应用。
 // 要在登录检查前面，不然没登录的人点了会先被带去授权
 app.get('/logout', (req, res) => {
   ws.logout(req)
-  res.redirect(302, `${ws.webUrl}/login`)
+  res.redirect(302, ws.logoutUrl(req))
 })
 
 // 统一登录：/sso/callback；其余要登录（/api 未登录回 401，页面跳平台授权）

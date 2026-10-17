@@ -10,8 +10,23 @@ import * as attendance from './services/attendance.js'
 import * as leave from './services/leave.js'
 import { myBalance } from './services/balance.js'
 import { getSettings } from './services/settings.js'
+import * as contracts from './services/contracts.js'
+import * as people from './services/people.js'
+import * as oneOnOne from './services/oneOnOne.js'
+import { contractScope } from './services/access.js'
 
 const RO = { readOnlyHint: true }
+
+/** 按 id 或姓名找一个当前用户能看的人；重名、找不到都说清楚 */
+async function findPerson(ctx, { userId, name }) {
+  if (userId) return Number(userId)
+  if (!name) return ctx.user.id
+  const scope = await visibleScope(ctx)
+  const hits = await prisma.employee.findMany({ where: { name: { contains: String(name) }, ...(scope.all ? {} : { id: { in: [...scope.ids] } }) }, take: 5 })
+  if (!hits.length) throw Object.assign(new Error(`找不到你能看的「${name}」`), { status: 404 })
+  if (hits.length > 1 && !hits.some(h => h.name === name)) throw Object.assign(new Error(`有好几个人：${hits.map(h => `${h.name}（${h.deptPath || ''}，id ${h.id}）`).join('、')}，请说清楚是哪位`), { status: 400 })
+  return (hits.find(h => h.name === name) || hits[0]).id
+}
 const obj = (properties = {}, required = []) => ({ type: 'object', properties, required })
 
 const TOOLS = [
@@ -82,18 +97,86 @@ const TOOLS = [
     }
   },
   {
+    name: 'get_employee_profile',
+    description: '看一个人的画像：档案（部门、职级、司龄、学历）、合同状态、人员成本、考勤异常、假期、1v1 情况和要留意的事。负责人能看下属，人事能看所有人，员工只能看自己。用户问「张三的情况」「他合同什么时候到期」「他今年花了公司多少钱」时用',
+    inputSchema: obj({ userId: { type: 'number', description: '平台用户 id' }, name: { type: 'string', description: '姓名（不知道 id 时用）' } }),
+    annotations: RO,
+    run: async (ctx, a) => {
+      const p = await people.portrait(ctx, await findPerson(ctx, a))
+      return {
+        profile: p.profile, flags: p.flags.map(f => f.text),
+        contracts: p.contracts?.map(c => ({ kind: c.kindLabel, status: c.statusLabel, startDate: c.startDate, endDate: c.endDate, daysLeft: c.daysLeft, probationEnd: c.probationEnd })),
+        cost: p.cost ? { ytd: p.cost.ytd, last12Months: p.cost.last12, monthlyAvg: p.cost.monthlyAvg, byCategory: p.cost.ytdByCategory, standard: p.cost.profile } : '无权查看',
+        attendanceAbnormalDays30: p.attendance.abnormalDays30, leave: p.leave, oneOnOne: p.oneOnOne,
+        url: appUrl(`/people/${p.profile.id}`)
+      }
+    }
+  },
+  {
+    name: 'get_people_overview',
+    description: '人员全景（公司或本部门的人员蓝图）：人数、入离职、平均司龄、合同到期 / 缺失、试用期、1v1 覆盖率、状态偏低、人员成本，按部门汇总，并列出要留意的人。人事看全公司，负责人看本部门',
+    inputSchema: obj({ dept: { type: 'string', description: '部门路径，只看这个部门' } }),
+    annotations: RO,
+    run: async (ctx, a) => {
+      const o = await people.overview(ctx, { dept: a.dept })
+      return { tiles: o.tiles, byDept: o.byDept, attention: o.people.filter(p => p.flags.some(f => f.level !== 'info')).slice(0, 30).map(p => ({ name: p.employee.name, dept: p.dept, flags: p.flags.filter(f => f.level !== 'info').map(f => f.text) })), url: appUrl('/people') }
+    }
+  },
+  {
+    name: 'list_expiring_contracts',
+    description: '即将到期、还没续签的劳动合同（默认按设置里的提醒天数）。人事看全公司，负责人看下属。用户问「最近谁的合同要到期」时用',
+    inputSchema: obj({ withinDays: { type: 'number', description: '多少天内到期，默认按设置' } }),
+    annotations: RO,
+    run: async (ctx, a) => (await contracts.expiringContracts(ctx, a)).map(c => ({ name: c.employee?.name, dept: c.employee?.deptPath, endDate: c.endDate, daysLeft: c.daysLeft, number: c.number }))
+  },
+  {
+    name: 'list_one_on_ones',
+    description: '某人的 1v1 记录（日期、话题、纪要、待办、下次时间）。负责人看下属的，员工看自己的（只有本人可见的部分）。用户问「我和张三上次 1v1 聊了什么」「张三有什么待办」时用',
+    inputSchema: obj({ userId: { type: 'number' }, name: { type: 'string', description: '姓名' }, limit: { type: 'number', description: '最多几条，默认 5' } }),
+    annotations: RO,
+    run: async (ctx, a) => {
+      const r = await oneOnOne.listFor(ctx, { userId: await findPerson(ctx, a) })
+      return { employee: r.employee?.name, rows: r.rows.slice(0, Math.min(Number(a.limit) || 5, 20)).map(m => ({ date: m.date, manager: m.manager?.name, mood: m.mood, topics: m.topics, notes: m.notes, actions: m.actions.map(x => `${x.done ? '✓' : '○'} ${x.text}（${x.ownerLabel}${x.due ? `，${x.due}` : ''}）`), nextDate: m.nextDate })) }
+    }
+  },
+  {
+    name: 'log_one_on_one',
+    description: '替负责人记一次 1v1：和谁、哪天、聊了什么、状态（1 ~ 5）、待办、下次时间。只能给自己的下属记（人事能给任何人记）。纪要默认本人可见，私人备注只有记录人和人事能看',
+    inputSchema: obj({
+      userId: { type: 'number' }, name: { type: 'string', description: '对方姓名' },
+      date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' },
+      notes: { type: 'string', description: '纪要' },
+      privateNote: { type: 'string', description: '私人备注（只有自己和人事能看）' },
+      mood: { type: 'number', description: '对方状态 1 很差 ~ 5 很好' },
+      topics: { type: 'array', items: { type: 'string' }, description: '话题，如 工作进展、困难与支持、职业发展' },
+      actions: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, owner: { type: 'string', enum: ['EMPLOYEE', 'MANAGER'] }, due: { type: 'string' } } }, description: '待办' },
+      nextDate: { type: 'string', description: '下次 1v1 日期 YYYY-MM-DD' },
+      shared: { type: 'boolean', description: '纪要和待办本人是否可见，默认 true' }
+    }, ['notes']),
+    run: async (ctx, a) => {
+      const userId = await findPerson(ctx, a)
+      const m = await oneOnOne.save(ctx, { ...a, userId, date: a.date || await contracts.today() })
+      return { id: m.id, employee: m.employee?.name, date: m.date, url: appUrl(`/one-on-ones?user=${userId}`) }
+    }
+  },
+  {
     name: 'list_pending_decisions',
     description: '等我审批的请假申请',
     inputSchema: obj(),
     annotations: RO,
     run: async (ctx) => {
       const names = new Map((await leave.listTypes(ctx, { all: true })).map(t => [t.code, t.name]))
-      return {
-        items: (await leave.pendingForMe(ctx)).slice(0, 20).map(r => ({
-          id: `L-${r.id}`, title: `${r.employee?.name || ''} ${names.get(r.typeCode) || '请假'} ${r.days} 天（${r.startDate} ~ ${r.endDate}）`,
-          requester: r.employee?.name, deadline: r.startDate, url: appUrl('/approvals')
-        }))
+      const items = (await leave.pendingForMe(ctx)).slice(0, 20).map(r => ({
+        id: `L-${r.id}`, title: `${r.employee?.name || ''} ${names.get(r.typeCode) || '请假'} ${r.days} 天（${r.startDate} ~ ${r.endDate}）`,
+        requester: r.employee?.name, deadline: r.startDate, url: appUrl('/approvals')
+      }))
+      // 人事：劳动合同快到期，要决定续不续签（期满前就要通知员工）
+      if ((await contractScope(ctx)).all) {
+        for (const c of (await contracts.expiringContracts(ctx, { withinDays: 30 })).slice(0, 10)) {
+          items.push({ id: `C-${c.id}`, title: `${c.employee?.name || ''} 的劳动合同 ${c.endDate} 到期，续签还是终止？`, requester: c.employee?.name, deadline: c.endDate, url: appUrl('/contracts?status=EXPIRING') })
+        }
       }
+      return { items }
     }
   },
   {
@@ -112,6 +195,14 @@ const TOOLS = [
             { name: '今日考勤异常', value: t.stats.abnormal, unit: '人', good: t.stats.abnormal === 0, url: appUrl('/team') },
             { name: '今日请假', value: t.stats.leave, unit: '人' }
           )
+        }
+      }
+      if (await canSeeTeam(ctx)) {
+        const o = await people.overview(ctx, {}).catch(() => null)
+        if (o) {
+          if (o.seeContracts) metrics.push({ name: '合同即将到期', value: o.tiles.contractsExpiring, unit: '人', good: o.tiles.contractsExpiring === 0, url: appUrl('/contracts?status=EXPIRING') })
+          if (o.cadence) metrics.push({ name: '1v1 覆盖率', value: o.tiles.oneOnOneCoverage, unit: '%', note: `${o.cadence} 天内谈过`, good: o.tiles.oneOnOneCoverage >= 80, url: appUrl('/one-on-ones') })
+          if (o.tiles.costYtd != null) metrics.push({ name: '今年人员成本', value: o.tiles.costYtd, unit: '元', note: `人均 ${o.tiles.costPerHead}`, url: appUrl('/costs') })
         }
       }
       return { metrics }
@@ -136,6 +227,10 @@ const TOOLS = [
       const scope = await visibleScope(ctx)
       const fresh = await prisma.leaveRequest.findMany({ where: { createdAt: { gte: since }, ...(scope.all ? {} : { userId: { in: [...scope.ids] } }) }, take: 20, orderBy: { id: 'desc' } })
       const names = new Map((await prisma.employee.findMany({ where: { id: { in: fresh.map(r => r.userId) } } })).map(e => [e.id, e.name]))
+      if ((await contractScope(ctx)).all) {
+        const soon = await contracts.expiringContracts(ctx, { withinDays: 14 })
+        if (soon.length) items.push({ title: `${soon.length} 份劳动合同 14 天内到期`, detail: soon.slice(0, 10).map(c => `${c.employee?.name}（${c.endDate}）`).join('、'), level: 'risk', url: appUrl('/contracts?status=EXPIRING') })
+      }
       for (const r of fresh) items.push({ title: `${names.get(r.userId) || ''} 提交请假 ${Number(r.days)} 天`, detail: `${r.startDate} ~ ${r.endDate}，${leave.STATUS_LABEL[r.status]}`, level: 'info', at: r.createdAt.toISOString() })
       return { items: items.slice(0, 20) }
     }
@@ -148,7 +243,7 @@ export function mountMcp(app) {
     const reply = (result) => res.json({ jsonrpc: '2.0', id, result })
     const fail = (code, message) => res.json({ jsonrpc: '2.0', id, error: { code, message } })
     if (id === undefined) return res.status(202).end()
-    if (method === 'initialize') return reply({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'hr', version: '0.1.0' } })
+    if (method === 'initialize') return reply({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'hr', version: '0.2.0' } })
     if (method === 'ping') return reply({})
     if (method === 'tools/list') return reply({ tools: TOOLS.map(({ run, ...t }) => t) })
     if (method === 'tools/call') {

@@ -10,6 +10,11 @@ import * as balance from '../services/balance.js'
 import * as holidays from '../services/holidays.js'
 import * as settings from '../services/settings.js'
 import * as sync from '../services/sync.js'
+import * as contracts from '../services/contracts.js'
+import * as cost from '../services/cost.js'
+import * as people from '../services/people.js'
+import * as oneOnOne from '../services/oneOnOne.js'
+import { contractScope, costScope } from '../services/access.js'
 
 const r = Router()
 const id = (req) => Number(req.params.id)
@@ -19,7 +24,9 @@ r.get('/me', wrap(async (req) => {
   const info = await appInfo()
   return {
     user: { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar, depts: ctx.user.depts },
-    hr: await isHr(ctx), team: await canSeeTeam(ctx), approver: (await leave.pendingForMe(ctx)).length > 0 || !!ctx.user.leaderOf?.length || await isHr(ctx),
+    hr: await isHr(ctx), team: await canSeeTeam(ctx),
+    contracts: await contractScope(ctx).then(sc => sc.all || sc.ids.size > 1), cost: await costScope(ctx).then(sc => sc.all || sc.ids.size > 0),
+    oneOnOne: await canSeeTeam(ctx), approver: (await leave.pendingForMe(ctx)).length > 0 || !!ctx.user.leaderOf?.length || await isHr(ctx),
     platform: { connected: ws.enabled, url: info?.platformUrl || null },
     brand: info?.brand || null,
     sources: PROVIDERS.filter(p => p.configured()).map(p => ({ source: p.source, label: p.label }))
@@ -70,6 +77,35 @@ r.post('/employees/import-dates', wrap(req => balance.importEmployeeDates(req.ct
 r.get('/hr-members', wrap(req => balance.listHr(req.ctx)))
 r.post('/hr-members', wrap(req => balance.addHr(req.ctx, req.body)))
 r.delete('/hr-members/:id', wrap(req => balance.removeHr(req.ctx, id(req))))
+
+// 人员：全景、画像、档案
+r.get('/people/overview', wrap(req => people.overview(req.ctx, req.query)))
+r.get('/people/:id', wrap(req => people.portrait(req.ctx, req.params.id)))
+r.patch('/people/:id/profile', wrap(req => people.updateProfile(req.ctx, id(req), req.body)))
+
+// 合同
+r.get('/contracts', wrap(req => contracts.listContracts(req.ctx, req.query)))
+r.post('/contracts', wrap(req => contracts.saveContract(req.ctx, req.body)))
+r.post('/contracts/upload-token', wrap(req => contracts.uploadToken(req.ctx, req.body)))
+r.get('/contracts/:id', wrap(req => contracts.getContract(req.ctx, id(req))))
+r.get('/contracts/:id/file', wrap(async (req, res) => res.redirect(302, await contracts.fileUrl(req.ctx, id(req)))))
+r.post('/contracts/:id/terminate', wrap(req => contracts.terminateContract(req.ctx, id(req), req.body)))
+r.delete('/contracts/:id', wrap(req => contracts.removeContract(req.ctx, id(req))))
+
+// 人员成本
+r.get('/cost/table', wrap(req => cost.costTable(req.ctx, req.query)))
+r.get('/cost/summary', wrap(req => cost.costSummary(req.ctx, req.query)))
+r.post('/cost/item', wrap(req => cost.setItem(req.ctx, req.body)))
+r.put('/cost/profile/:id', wrap(req => cost.setProfile(req.ctx, id(req), req.body)))
+r.post('/cost/generate', wrap(req => cost.generate(req.ctx, req.body)))
+r.post('/cost/import', wrap(req => cost.importItems(req.ctx, req.body)))
+
+// 1v1
+r.get('/one-on-ones/roster', wrap(req => oneOnOne.roster(req.ctx, req.query)))
+r.get('/one-on-ones', wrap(req => oneOnOne.listFor(req.ctx, req.query)))
+r.post('/one-on-ones', wrap(req => oneOnOne.save(req.ctx, req.body)))
+r.delete('/one-on-ones/:id', wrap(req => oneOnOne.remove(req.ctx, id(req))))
+r.post('/one-on-ones/:id/action', wrap(req => oneOnOne.toggleAction(req.ctx, id(req), req.body)))
 
 // 设置
 r.get('/settings', wrap(req => settings.listSettings(req.ctx)))

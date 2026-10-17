@@ -3,7 +3,7 @@
   "name": "人事考勤",
   "icon": "icon.svg",
   "category": "人事行政",
-  "description": "钉钉 / 飞书 / 企业微信打卡汇总、请假审批、年假余额",
+  "description": "打卡汇总、请假审批、年假；合同与协议、人员成本、1v1 记录、人员画像与全景",
   "port": 3000,
   "health": "/health",
   "entry": "/",

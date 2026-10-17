@@ -1,10 +1,10 @@
 // 假期余额（人事）：年假按工龄发放、手工调整、年末结转；员工的人事字段（入职日期、参加工作日期、审批人）；人事成员
 import { prisma } from '../lib/prisma.js'
-import { badRequest, notFound } from '../lib/http.js'
+import { badRequest, forbidden, notFound } from '../lib/http.js'
 import { currentYear, isDateStr, leaveUnits, unitsByYear } from '../lib/dates.js'
 import { workdayFn } from './holidays.js'
 import { annualEntitlement } from '../lib/annualLeave.js'
-import { requireHr } from './access.js'
+import { requireHr, visibleScope } from './access.js'
 import { audit } from './audit.js'
 import { employeeBrief } from './directory.js'
 import { balanceOf } from './leave.js'
@@ -221,11 +221,13 @@ export async function removeHr(ctx, userId) {
 }
 
 /** 选人用（人事给员工指定审批人、加人事成员） */
+/** 选人：人事从全公司选，负责人从自己能看的人里选 */
 export async function searchEmployees(ctx, { keyword } = {}) {
-  await requireHr(ctx)
+  const scope = await visibleScope(ctx)
+  if (!scope.all && scope.ids.size <= 1) throw forbidden('只有人事和部门负责人能选人')
   const k = String(keyword || '').trim()
   const rows = await prisma.employee.findMany({
-    where: { active: true, ...(k ? { OR: [{ name: { contains: k } }, { jobNumber: { contains: k } }, { deptPath: { contains: k } }] } : {}) },
+    where: { active: true, ...(scope.all ? {} : { id: { in: [...scope.ids] } }), ...(k ? { OR: [{ name: { contains: k } }, { jobNumber: { contains: k } }, { deptPath: { contains: k } }] } : {}) },
     orderBy: { name: 'asc' }, take: 30
   })
   return rows.map(employeeBrief)

@@ -36,6 +36,7 @@ export const api = {
   get: (path, q) => request('GET', path + qs(q)),
   post: (path, body) => request('POST', path, body || {}),
   patch: (path, body) => request('PATCH', path, body || {}),
+  put: (path, body) => request('PUT', path, body || {}),
   del: (path) => request('DELETE', path),
   url: (path, q) => 'api/' + path.replace(/^\//, '') + qs(q)
 }

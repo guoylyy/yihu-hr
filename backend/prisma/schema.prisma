@@ -39,6 +39,22 @@ model Employee {
   workStartDate DateTime? @db.Date
   /// 指定审批人（不设则找部门负责人，再找人事）
   approverId    Int?
+  /// 档案（人事填，画像用）：用工类型 FULL_TIME 全职 / INTERN 实习 / PART_TIME 兼职 / OUTSOURCED 外包 / REHIRED 退休返聘
+  employmentType String?  @db.VarChar(12)
+  /// 转正日期、离职日期（离职日期用来算竞业限制期）
+  regularDate   DateTime? @db.Date
+  leaveDate     DateTime? @db.Date
+  /// 职级（如 P5、M2，公司自己的写法）
+  level         String?   @db.VarChar(20)
+  /// M 男 / F 女
+  gender        String?   @db.VarChar(1)
+  birthDate     DateTime? @db.Date
+  /// 学历：高中及以下 / 大专 / 本科 / 硕士 / 博士
+  education     String?   @db.VarChar(10)
+  school        String?   @db.VarChar(100)
+  major         String?   @db.VarChar(100)
+  /// 标签（技能、特长、关注点），字符串数组
+  tags          Json?
   syncedAt      DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -203,4 +219,107 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+/// 合同与协议：劳动合同、保密协议、竞业限制协议等，一人可有多份。续签 = 新建一份，renewOfId 指向上一份
+model Contract {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  /// LABOR 劳动合同 / CONFIDENTIALITY 保密协议 / NON_COMPETE 竞业限制 / IP 知识产权归属 / TRAINING 培训服务期 / INTERN 实习协议 / SERVICE 劳务协议 / OTHER 其他
+  kind            String    @db.VarChar(16)
+  title           String?   @db.VarChar(100)
+  number          String?   @db.VarChar(50)
+  /// FIXED 固定期限 / OPEN 无固定期限 / TASK 以完成一定工作任务为期限
+  term            String    @default("FIXED") @db.VarChar(5)
+  signedDate      String?   @db.VarChar(10)
+  startDate       String    @db.VarChar(10)
+  /// 固定期限必填；无固定期限为空
+  endDate         String?   @db.VarChar(10)
+  /// 劳动合同的试用期截止日
+  probationEnd    String?   @db.VarChar(10)
+  /// 竞业限制：期限（月，法定不超过 24）、每月补偿金；从离职日起算
+  restrictMonths  Int?
+  monthlyComp     Decimal?  @db.Decimal(12, 2)
+  /// 培训服务期：服务期（月）、违约金上限
+  serviceMonths   Int?
+  penalty         Decimal?  @db.Decimal(12, 2)
+  /// 签好的合同文件：以虎 One 文件存储里的 key（相对本应用目录）
+  fileKey         String?   @db.VarChar(500)
+  fileName        String?   @db.VarChar(200)
+  fileSize        Int?
+  renewOfId       Int?
+  /// 提前解除 / 终止
+  terminatedAt    String?   @db.VarChar(10)
+  terminateReason String?   @db.VarChar(300)
+  note            String?   @db.VarChar(1000)
+  createdBy       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId, kind])
+  @@index([endDate])
+}
+
+/// 每人每月的标准成本（人事填），「生成某月成本」按它填成本表
+model CostProfile {
+  userId    Int      @id
+  /// 月应发工资（基本 + 绩效 + 津贴）
+  salary    Decimal  @default(0) @db.Decimal(12, 2)
+  /// 社保、公积金的单位部分
+  social    Decimal  @default(0) @db.Decimal(12, 2)
+  housing   Decimal  @default(0) @db.Decimal(12, 2)
+  /// 福利（餐补、交通、商业保险等）
+  benefit   Decimal  @default(0) @db.Decimal(12, 2)
+  note      String?  @db.VarChar(300)
+  updatedBy Int?
+  updatedAt DateTime @updatedAt
+}
+
+/// 成本表：某人某月某类成本一个数（再录一次是改，不是加）
+model CostItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  /// YYYY-MM
+  month     String   @db.VarChar(7)
+  /// SALARY 工资 / BONUS 奖金 / SOCIAL 社保 / HOUSING 公积金 / BENEFIT 福利 / TRAINING 培训 / EQUIPMENT 设备办公 / RECRUIT 招聘 / NON_COMPETE 竞业补偿 / SEVERANCE 经济补偿 / OTHER 其他
+  category  String   @db.VarChar(12)
+  amount    Decimal  @db.Decimal(12, 2)
+  /// MANUAL 手填 / IMPORT 导入 / PROFILE 按标准生成 / CONTRACT 按竞业协议生成
+  source    String   @default("MANUAL") @db.VarChar(8)
+  note      String?  @db.VarChar(300)
+  updatedBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month, category])
+  @@index([month])
+}
+
+/// 1v1 记录：负责人（或人事）和某位同事的一次 1v1
+model OneOnOne {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  /// 谁谈的（记录人）
+  managerId   Int
+  date        String    @db.VarChar(10)
+  minutes     Int?
+  /// 状态 1 ~ 5（1 很差、3 一般、5 很好）
+  mood        Int?
+  /// 话题：字符串数组（工作进展、目标、成长、困难、反馈、职业发展、团队、生活……）
+  topics      Json?
+  /// 谈话纪要：shared 时本人也能看
+  notes       String?   @db.Text
+  /// 只有记录人和人事能看
+  privateNote String?   @db.Text
+  /// 待办 [{ text, owner: EMPLOYEE | MANAGER, due, done }]
+  actions     Json?
+  nextDate    String?   @db.VarChar(10)
+  shared      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([userId, date])
+  @@index([managerId, date])
 }
