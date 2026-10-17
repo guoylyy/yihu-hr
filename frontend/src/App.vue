@@ -5,7 +5,10 @@
       <NavList :items="items" />
       <div class="who">
         <span>{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></span>
-        <a href="logout" class="logout" title="退出后可以在平台换个账号登录">退出</a>
+        <span class="acts">
+          <a href="logout?switch=1" class="logout" title="退出以虎 One 的登录，换个账号登录后回到这里">换账号</a>
+          <a href="logout" class="logout" title="回以虎 One 工作台（不退出平台登录）">退出</a>
+        </span>
       </div>
     </aside>
     <header class="top">
@@ -16,7 +19,8 @@
     <el-drawer v-model="drawer" direction="ltr" size="220px" :with-header="false">
       <NavList :items="items" @go="drawer = false" />
       <div v-if="me.version" class="muted small" style="padding: 10px 12px 0">人事考勤 v{{ me.version }}</div>
-      <a href="logout" class="logout drawer-logout">退出（{{ me.user?.name }}）</a>
+      <a href="logout" class="logout drawer-logout">退出，回工作台（{{ me.user?.name }}）</a>
+      <a href="logout?switch=1" class="logout drawer-logout" style="margin-top: 0; border-top: none">换账号</a>
     </el-drawer>
     <main class="main">
       <div v-if="!me.loaded" class="page muted">加载失败，请刷新重试</div>
@@ -57,6 +61,7 @@ const items = computed(() => [
 .who { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hr-border); color: var(--hr-muted); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .logout { color: var(--hr-muted); text-decoration: none; font-size: 13px; }
 .logout:hover { color: var(--hr-primary); }
+.acts { display: flex; gap: 10px; flex: none; }
 .drawer-logout { display: block; margin-top: 16px; padding: 10px 12px; border-top: 1px solid var(--hr-border); }
 .role { margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: var(--hr-primary-soft); color: var(--hr-primary); }
 .top { display: none; }

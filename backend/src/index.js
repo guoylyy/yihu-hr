@@ -10,6 +10,7 @@ import { touchEmployee } from './services/directory.js'
 import { seedLeaveTypes } from './services/leave.js'
 import { startScheduler } from './services/sync.js'
 import { VERSION } from './lib/version.js'
+import { refreshPlatformChannels } from './providers/platformToken.js'
 
 const app = express()
 app.set('trust proxy', true)
@@ -38,11 +39,12 @@ if (hasStatic) {
   app.use('/assets', (req, res) => res.status(404).end()) // 旧版本的文件名（发布后还开着的老页面）：404，不要回落到 index.html
 }
 
-// 退出 / 换账号：清掉本应用的会话，再让平台也退出登录（以虎 One 0.6.1+ 的 /logout），换个账号登录后直接回到本应用。
+// 退出：只清本应用的会话，回以虎 One 工作台（平台的登录保留，不用重新登录）。
+// 换账号（?switch=1）：平台也退出登录，换个账号登录后直接回到本应用（以虎 One 0.6.1+ 的 /logout）。
 // 要在登录检查前面，不然没登录的人点了会先被带去授权
 app.get('/logout', (req, res) => {
   ws.logout(req)
-  res.redirect(302, ws.logoutUrl(req))
+  res.redirect(302, req.query.switch === '1' ? ws.logoutUrl(req) : `${ws.webUrl}/`)
 })
 
 // 统一登录：/sso/callback；其余要登录（/api 未登录回 401，页面跳平台授权）
@@ -66,6 +68,7 @@ if (hasStatic) {
 
 async function main() {
   await seedLeaveTypes()
+  await refreshPlatformChannels() // 以虎 One 登录方式里配了钉钉 / 飞书，打卡同步直接用
   if (process.env.NODE_ENV !== 'test') startScheduler()
   const port = Number(process.env.PORT) || 3000
   const mode = ws.enabled ? '' : devUser() ? '（本地开发模式：未接入平台）' : '（未接入平台：缺 YH_CLIENT_ID 等，所有请求都会 401）'

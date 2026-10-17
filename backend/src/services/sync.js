@@ -10,6 +10,8 @@ import { getSettings } from './settings.js'
 import { requireHr } from './access.js'
 import { audit } from './audit.js'
 import { syncDirectory } from './directory.js'
+import { platformError, refreshPlatformChannels } from '../providers/platformToken.js'
+const PLATFORM_KEY = { DINGTALK: 'dingtalk', FEISHU: 'feishu' }
 
 const running = new Set()
 
@@ -125,6 +127,7 @@ export async function manualSync(ctx, { source, from, to } = {}) {
 /** 设置页：每个来源配没配、最近一次结果、对不上的人 */
 export async function syncStatus(ctx) {
   await requireHr(ctx)
+  await refreshPlatformChannels() // 刚在平台配好登录方式的，这里立刻能看到
   const emps = await prisma.employee.findMany({ where: { active: true } })
   const sources = []
   for (const p of [...PROVIDERS, { source: 'DIRECTORY', label: '平台通讯录', configured: () => true }]) {
@@ -132,7 +135,11 @@ export async function syncStatus(ctx) {
     const unmatchedPeople = p.idOf
       ? emps.filter(e => !p.idOf(e)).slice(0, 200).map(e => ({ id: e.id, name: e.name, deptPath: e.deptPath, jobNumber: e.jobNumber }))
       : []
-    sources.push({ source: p.source, label: p.label, configured: p.configured(), hint: p.hint || null, running: running.has(p.source), runs, unmatchedPeople })
+    sources.push({
+      source: p.source, label: p.label, configured: p.configured(), credSource: p.credSource?.() || null,
+      setupHint: p.setupHint || null, hint: p.hint || null, platformError: PLATFORM_KEY[p.source] ? platformError(PLATFORM_KEY[p.source]) : null,
+      running: running.has(p.source), runs, unmatchedPeople
+    })
   }
   return { employees: emps.length, sources }
 }
@@ -143,10 +150,12 @@ let lastDirFull = 0
 export function startScheduler() {
   let lastRun = 0
   let lastDir = 0
+  let lastChannels = 0
   const tick = async () => {
     try {
       const s = await getSettings()
       const now = Date.now()
+      if (now - lastChannels > 600_000) { lastChannels = now; await refreshPlatformChannels() }
       if (now - lastDir > 3600_000) {
         lastDir = now
         const full = now - lastDirFull > 24 * 3600_000

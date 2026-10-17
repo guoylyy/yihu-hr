@@ -20,13 +20,11 @@
 
 打卡数据**只读**，每 30 分钟（可调）把最近 3 天的结果重拉一遍（补卡、改结果会改动前几天），按「来源 + 记录 id」去重。人对人用平台用户主数据里的 `dingUserId` / `feishuOpenId` / `wecomUserId`，所以**先在平台「管理 → 登录方式」配好对应的登录方式并同步通讯录**。
 
-凭证是密钥，管理员写进服务器上的 `apps/hr/.env`（不进代码库），只配要用的那家：
+凭证从哪来：
 
-| 来源 | 变量 | 开放平台上要做的 |
-| --- | --- | --- |
-| 钉钉 | `DINGTALK_APP_KEY` `DINGTALK_APP_SECRET` | 企业内部应用（建议就用平台登录那个），开通考勤「打卡结果」读权限 |
-| 飞书 | `FEISHU_APP_ID` `FEISHU_APP_SECRET` | **必须和平台登录用同一个应用**（open_id 才对得上）；开通 `attendance:task:readonly`（导出打卡数据）和 `contact:user.employee_id:readonly`（获取用户 user ID）。拿不到 user ID 权限时，按平台上的工号对 |
-| 企业微信 | `WECOM_CORP_ID` `WECOM_CHECKIN_SECRET` | 「应用管理 → 打卡」系统应用的 Secret（不是平台登录用的自建应用），并把 API 可见范围设为全员 |
+- **钉钉、飞书**：直接用以虎 One「管理 → 登录方式」里配好的那个企业内部应用（平台 0.6.4+ 给可信应用发 access_token，密钥不出平台），不用再配一遍。要在钉钉 / 飞书开发者后台给**那个应用**开通考勤权限：钉钉「考勤打卡结果」读权限；飞书 `attendance:task:readonly`（导出打卡数据）和 `contact:user.employee_id:readonly`（获取用户 user ID，拿不到时按平台上的工号对）
+- **企业微信**：打卡要用「应用管理 → 打卡」这个系统应用的 Secret（和平台登录用的自建应用不是一个），管理员写进服务器上的 `apps/hr/.env`：`WECOM_CORP_ID`、`WECOM_CHECKIN_SECRET`，并把打卡的 API 可见范围设为全员
+- 要用和平台不同的钉钉 / 飞书应用，也可以在 `apps/hr/.env` 写 `DINGTALK_APP_KEY` `DINGTALK_APP_SECRET` / `FEISHU_APP_ID` `FEISHU_APP_SECRET`，写了就优先用（飞书必须是同一个应用，open_id 才对得上）
 
 改完 `.env` 在控制台重启应用。之后在「设置 → 打卡同步」能看到每家配没配、最近的同步结果、**对不上身份的人**（这些人要先在平台上绑定账号），也可以手动同步、补拉历史（一次最多 62 天）。
 

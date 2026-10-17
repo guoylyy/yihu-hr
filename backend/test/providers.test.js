@@ -112,3 +112,37 @@ test('企业微信：时间范围按时区换成秒', async () => {
   assert.equal(b.endtime, Date.parse('2026-10-13T00:00:00+08:00') / 1000 - 1)
   assert.deepEqual(b.useridlist, ['w1'])
 })
+
+test('钉钉：本应用没配凭证时用以虎 One 登录方式里那个应用的 token，失效了换新的', async () => {
+  const { ws } = await import('../src/lib/platform.js')
+  const { refreshPlatformChannels } = await import('../src/providers/platformToken.js')
+  delete process.env.DINGTALK_APP_KEY; delete process.env.DINGTALK_APP_SECRET
+  dingtalk._token.reset()
+  const enabled = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ws), 'enabled')
+  Object.defineProperty(ws, 'enabled', { get: () => true, configurable: true })
+  let n = 0
+  ws.channelToken = async (p) => { n++; assert.equal(p, 'dingtalk'); return { accessToken: `P${n}`, expiresAt: new Date(Date.now() + 7200_000).toISOString() } }
+  try {
+    await refreshPlatformChannels()
+    assert.equal(dingtalk.configured(), true)
+    assert.equal(dingtalk.credSource(), 'PLATFORM')
+    // 第一次 token 被钉钉判过期（42001）：丢掉，下次用新的
+    let first = true
+    const calls = stub({ '/attendance/list': (c) => (first && !(first = false) ? { errcode: 42001, errmsg: 'access_token expired' } : { errcode: 0, recordresult: [], hasMore: false }) })
+    await assert.rejects(dingtalk.fetch(['u1'], '2026-10-12', '2026-10-12', TZ), /42001/)
+    await dingtalk.fetch(['u1'], '2026-10-12', '2026-10-12', TZ)
+    assert.ok(calls[0].url.includes('access_token=P'))
+    assert.ok(!calls.some(c => c.url.includes('/gettoken')), '不该自己去换 token')
+    assert.notEqual(calls[0].url.match(/access_token=(\w+)/)[1], calls[1].url.match(/access_token=(\w+)/)[1])
+    // 平台没配钉钉：未配置，带上平台的说明
+    ws.channelToken = async () => { throw new Error('钉钉未配置：请管理员在「管理 → 登录方式」填写') }
+    dingtalk._token.reset()
+    await refreshPlatformChannels()
+    assert.equal(dingtalk.configured(), false)
+    assert.equal(dingtalk.credSource(), null)
+  } finally {
+    delete ws.channelToken
+    delete ws.enabled
+    if (enabled) Object.defineProperty(Object.getPrototypeOf(ws), 'enabled', enabled)
+  }
+})

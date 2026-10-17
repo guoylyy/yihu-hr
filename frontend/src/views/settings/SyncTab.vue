@@ -1,15 +1,17 @@
 <template>
   <div v-loading="loading">
-    <p class="help">平台通讯录 {{ status?.employees ?? '-' }} 人。打卡来源的凭证由管理员写进服务器上的 <code>apps/hr/.env</code>（见 README），配好后重启应用。</p>
+    <p class="help">平台通讯录 {{ status?.employees ?? '-' }} 人。钉钉、飞书直接用以虎 One「管理 → 登录方式」里配好的那个应用（不用再配密钥，但要在开发者后台给它开通考勤权限）；企业微信打卡要单独的「打卡」应用 Secret，写进服务器上的 <code>apps/hr/.env</code>。</p>
     <div v-for="s in status?.sources || []" :key="s.source" class="card">
       <div class="head">
         <h3>{{ s.label }}</h3>
-        <el-tag v-if="s.configured" type="success" size="small">已配置</el-tag>
+        <el-tag v-if="s.credSource === 'PLATFORM'" type="success" size="small">用以虎 One 登录方式里的{{ s.label }}应用</el-tag>
+        <el-tag v-else-if="s.credSource === 'OWN'" type="success" size="small">用本应用配的凭证</el-tag>
+        <el-tag v-else-if="s.configured" type="success" size="small">已配置</el-tag>
         <el-tag v-else type="info" size="small">未配置</el-tag>
         <el-tag v-if="s.running" type="warning" size="small">同步中</el-tag>
         <el-button v-if="s.configured" size="small" style="margin-left: auto" :loading="busy === s.source" @click="run({ source: s.source })">立即同步</el-button>
       </div>
-      <div v-if="s.hint" class="help">{{ s.hint }}</div>
+      <div v-if="!s.configured && s.setupHint" class="help">{{ s.setupHint }}<span v-if="s.platformError" class="muted">（平台返回：{{ s.platformError }}）</span></div>
       <div v-if="s.runs.length" class="table-wrap">
         <el-table :data="s.runs.slice(0, 5)" size="small">
           <el-table-column label="开始" min-width="140"><template #default="{ row }">{{ fmtTime(row.startedAt) }}</template></el-table-column>
@@ -28,6 +30,7 @@
       </div>
       <el-collapse v-if="s.configured && s.unmatchedPeople.length" style="margin-top: 8px">
         <el-collapse-item :title="`${s.unmatchedPeople.length} 人对不上${s.label}身份（打卡不会同步）`">
+          <div v-if="s.hint" class="help">{{ s.hint }}</div>
           <div class="small">{{ s.unmatchedPeople.map(p => p.name + (p.jobNumber ? `(${p.jobNumber})` : '')).join('、') }}</div>
         </el-collapse-item>
       </el-collapse>

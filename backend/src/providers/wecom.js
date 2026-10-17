@@ -48,8 +48,10 @@ export default {
   batchUsers: 100,
   maxDays: 30,
   configured: () => !!(env().corp && env().secret),
+  credSource: () => (env().corp && env().secret ? 'OWN' : null),
   idOf: (emp) => emp.wecomUserId || null,
-  hint: '在「管理 → 登录方式」配企业微信并同步通讯录，员工才有企业微信身份',
+  setupHint: '企业微信打卡要用「应用管理 → 打卡」这个系统应用的 Secret（和平台登录用的自建应用不是一个），管理员写进 apps/hr/.env 的 WECOM_CORP_ID / WECOM_CHECKIN_SECRET，并把打卡的 API 可见范围设为全员，改完重启应用',
+  hint: '员工要有企业微信身份才能对上打卡：在以虎 One「管理 → 登录方式」里同步企业微信通讯录，或本人用企业微信登录一次',
   async fetch(ids, from, to, tz) {
     const start = Math.floor(zonedTime(from, '00:00', tz).getTime() / 1000)
     const end = Math.floor(zonedTime(addDays(to, 1), '00:00', tz).getTime() / 1000) - 1

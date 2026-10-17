@@ -3,17 +3,22 @@
 // 先用通讯录接口把 open_id 换成 user_id（缓存在 Employee.feishuUserId），换不到的人有工号就按工号查
 // 文档：https://open.feishu.cn/document/server-docs/attendance-v1/user_task/query
 import { callJson, tokenCache } from './http.js'
+import { platformAvailable, platformToken, resetPlatformToken } from './platformToken.js'
 import { dayInTz } from '../lib/dates.js'
 
 const API = 'https://open.feishu.cn/open-apis'
 const env = () => ({ id: process.env.FEISHU_APP_ID || '', secret: process.env.FEISHU_APP_SECRET || '' })
 
-const token = tokenCache(async () => {
+const ownToken = tokenCache(async () => {
   const { id, secret } = env()
   const j = await callJson('飞书', `${API}/auth/v3/tenant_access_token/internal`, { method: 'POST', body: { app_id: id, app_secret: secret } })
   if (j.code !== 0) throw new Error(`飞书取 tenant_access_token 失败（${j.code}）：${j.msg}`)
   return { token: j.tenant_access_token, expiresIn: j.expire }
 })
+const hasOwn = () => !!(env().id && env().secret)
+// 应用自己配了凭证就用自己的；没配用以虎 One 登录方式里那个飞书应用的（本来就要求同一个应用，open_id 才对得上）
+const token = async () => (hasOwn() ? ownToken() : platformToken('feishu'))
+token.reset = () => { ownToken.reset(); resetPlatformToken('feishu') }
 
 async function api(path, opts = {}) {
   const j = await callJson('飞书', API + path, { ...opts, headers: { Authorization: `Bearer ${await token()}` } })
@@ -70,9 +75,11 @@ export default {
   label: '飞书',
   batchUsers: 50,
   maxDays: 7,
-  configured: () => !!(env().id && env().secret),
+  configured: () => hasOwn() || platformAvailable('feishu'),
+  credSource: () => (hasOwn() ? 'OWN' : platformAvailable('feishu') ? 'PLATFORM' : null),
   idOf: (emp) => emp.feishuUserId || (emp.feishuOpenId && emp.jobNumber ? `no:${emp.jobNumber}` : null),
-  hint: '飞书凭证要和平台登录用的是同一个应用；还要开通「获取用户 user ID」权限，或者在平台上给员工填工号',
+  setupHint: '在以虎 One「管理 → 登录方式」配好飞书（人事考勤直接用那个应用的凭证），并在飞书开发者后台给它开通 attendance:task:readonly（导出打卡数据）和 contact:user.employee_id:readonly（获取用户 user ID）；也可以在 apps/hr/.env 单独配 FEISHU_APP_ID / FEISHU_APP_SECRET（必须是同一个应用）',
+  hint: '员工要有飞书身份才能对上打卡：在以虎 One 里从飞书同步通讯录，或本人用飞书登录一次；拿不到 user ID 权限时按平台上的工号对',
   /**
    * ids：user_id，或 'no:<工号>'（换不到 user_id 时按工号查）
    * 返回的 vendorUserId 和传入的 id 同一种写法
