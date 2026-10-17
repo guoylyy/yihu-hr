@@ -3,7 +3,10 @@
     <aside class="side">
       <div class="brand">人事考勤</div>
       <NavList :items="items" />
-      <div class="who">{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></div>
+      <div class="who">
+        <span>{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></span>
+        <a href="logout" class="logout" title="退出后可以在平台换个账号登录">退出</a>
+      </div>
     </aside>
     <header class="top">
       <el-button text @click="drawer = true"><el-icon size="20"><Menu /></el-icon></el-button>
@@ -12,6 +15,7 @@
     </header>
     <el-drawer v-model="drawer" direction="ltr" size="220px" :with-header="false">
       <NavList :items="items" @go="drawer = false" />
+      <a href="logout" class="logout drawer-logout">退出（{{ me.user?.name }}）</a>
     </el-drawer>
     <main class="main">
       <div v-if="!me.loaded" class="page muted">加载失败，请刷新重试</div>
@@ -40,7 +44,10 @@ const items = computed(() => [
 .shell { display: flex; min-height: 100vh; }
 .side { width: 200px; flex: none; background: var(--hr-surface); border-right: 1px solid var(--hr-border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
 .brand { font-weight: 600; font-size: 16px; padding: 18px 20px; color: var(--hr-primary); }
-.who { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hr-border); color: var(--hr-muted); font-size: 13px; }
+.who { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hr-border); color: var(--hr-muted); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.logout { color: var(--hr-muted); text-decoration: none; font-size: 13px; }
+.logout:hover { color: var(--hr-primary); }
+.drawer-logout { display: block; margin-top: 16px; padding: 10px 12px; border-top: 1px solid var(--hr-border); }
 .role { margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: var(--hr-primary-soft); color: var(--hr-primary); }
 .top { display: none; }
 .main { flex: 1; min-width: 0; }
