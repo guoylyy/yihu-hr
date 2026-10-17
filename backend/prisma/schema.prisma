@@ -1,0 +1,206 @@
+// 人事考勤的数据模型。人以以虎 One 为准：Employee 是平台用户主数据的本地副本（id = 平台 user.id），
+// 只多存平台没有的人事字段（入职日期、参加工作日期、审批人）。
+// 表结构改动要向前兼容（先加字段、后删字段）：平台回滚只回代码不回数据库。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// 员工：平台用户的本地副本（每小时从 /api/open/users 增量同步）+ 人事字段
+model Employee {
+  /// 平台 user.id
+  id            Int       @id
+  name          String    @db.VarChar(50)
+  jobNumber     String?   @db.VarChar(50)
+  title         String?   @db.VarChar(100)
+  avatar        String?   @db.VarChar(500)
+  spaceId       Int       @default(1)
+  /// 主部门（平台部门 id 和完整路径）
+  deptId        Int?
+  deptPath      String?   @db.VarChar(300)
+  /// 所在的全部部门 [{ id, name, path, isPrimary }]，path 是平台部门树拼出的完整路径（看下级部门用）
+  depts         Json?
+  /// 担任负责人的部门 id（来自统一登录的 leaderOf，本人登录过才有）
+  leaderOf      Json?
+  active        Boolean   @default(true)
+  /// 三家的身份，用来对上打卡记录
+  dingUserId    String?   @db.VarChar(64)
+  feishuOpenId  String?   @db.VarChar(64)
+  /// 飞书考勤接口只认 user_id（employee_id），由 open_id 换来后缓存在这里
+  feishuUserId  String?   @db.VarChar(64)
+  wecomUserId   String?   @db.VarChar(64)
+  /// 人事字段：入职本单位日期、参加工作日期（算法定年假用）
+  hireDate      DateTime? @db.Date
+  workStartDate DateTime? @db.Date
+  /// 指定审批人（不设则找部门负责人，再找人事）
+  approverId    Int?
+  syncedAt      DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([deptId])
+  @@index([dingUserId])
+  @@index([feishuOpenId])
+  @@index([wecomUserId])
+}
+
+/// 应用内角色。平台管理员自动算人事（HR），不用登记
+model RoleMember {
+  userId    Int
+  role      String   @db.VarChar(20)
+  createdBy Int?
+  createdAt DateTime @default(now())
+
+  @@id([userId, role])
+}
+
+/// 打卡记录：三家各自的记录统一成一种形状。(source, externalId) 唯一，重复同步只会更新
+model Punch {
+  id         Int       @id @default(autoincrement())
+  /// DINGTALK / FEISHU / WECOM / MANUAL
+  source     String    @db.VarChar(10)
+  externalId String    @db.VarChar(128)
+  userId     Int
+  /// 考勤日（按设置的时区），YYYY-MM-DD
+  workDate   String    @db.VarChar(10)
+  /// IN 上班 / OUT 下班 / OUTSIDE 外出
+  kind       String    @db.VarChar(10)
+  /// 实际打卡时间；缺卡时为空
+  checkTime  DateTime?
+  /// 应打卡时间（排班）
+  planTime   DateTime?
+  /// NORMAL / LATE / SERIOUS_LATE / EARLY / MISSING / ABSENT / LOCATION / OTHER
+  result     String    @db.VarChar(16)
+  location   String?   @db.VarChar(200)
+  note       String?   @db.VarChar(500)
+  /// 手工补录的人
+  createdBy  Int?
+  raw        Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([source, externalId])
+  @@index([userId, workDate])
+  @@index([workDate])
+}
+
+/// 每次同步的记录（设置页「同步状态」）
+model SyncRun {
+  id         Int       @id @default(autoincrement())
+  /// DINGTALK / FEISHU / WECOM / DIRECTORY
+  source     String    @db.VarChar(10)
+  /// AUTO 定时 / MANUAL 手动
+  trigger    String    @db.VarChar(10)
+  dateFrom   String?   @db.VarChar(10)
+  dateTo     String?   @db.VarChar(10)
+  ok         Boolean?
+  fetched    Int       @default(0)
+  saved      Int       @default(0)
+  /// 有平台账号但对不上这家身份的人数
+  unmatched  Int       @default(0)
+  error      String?   @db.Text
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([source, startedAt])
+}
+
+/// 假期类型
+model LeaveType {
+  code      String   @id @db.VarChar(20)
+  name      String   @db.VarChar(30)
+  /// 带薪
+  paid      Boolean  @default(true)
+  /// 要扣余额（年假、调休）；不扣余额的假只记天数
+  balanced  Boolean  @default(false)
+  /// 最小单位：DAY 整天 / HALF 半天
+  unit      String   @default("HALF") @db.VarChar(5)
+  active    Boolean  @default(true)
+  sort      Int      @default(0)
+  note      String?  @db.VarChar(200)
+  updatedAt DateTime @updatedAt
+}
+
+/// 请假申请
+model LeaveRequest {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  typeCode     String    @db.VarChar(20)
+  startDate    String    @db.VarChar(10)
+  /// AM 上午开始 / PM 下午开始
+  startHalf    String    @default("AM") @db.VarChar(2)
+  endDate      String    @db.VarChar(10)
+  /// AM 上午结束 / PM 下午结束
+  endHalf      String    @default("PM") @db.VarChar(2)
+  /// 工作日天数（扣掉周末和节假日），0.5 的倍数
+  days         Decimal   @db.Decimal(6, 1)
+  reason       String?   @db.VarChar(500)
+  /// PENDING / APPROVED / REJECTED / CANCELLED
+  status       String    @default("PENDING") @db.VarChar(10)
+  approverId   Int?
+  decidedBy    Int?
+  decidedAt    DateTime?
+  decisionNote String?   @db.VarChar(500)
+  /// 经哪里提交：WEB / AI
+  via          String    @default("WEB") @db.VarChar(5)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, startDate])
+  @@index([status, approverId])
+  @@index([startDate, endDate])
+}
+
+/// 假期余额流水：余额 = 某人某年某类假的 delta 之和。只追加，不改不删，便于对账
+model LeaveLedger {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  year      Int
+  typeCode  String   @db.VarChar(20)
+  /// 正数增加，负数扣减（天）
+  delta     Decimal  @db.Decimal(6, 1)
+  /// GRANT 发放 / CARRY_OVER 上年结转 / ADJUST 调整 / USE 请假扣减 / RESTORE 撤销退回 / EXPIRE 清零
+  kind      String   @db.VarChar(12)
+  requestId Int?
+  note      String?  @db.VarChar(300)
+  createdBy Int?
+  createdAt DateTime @default(now())
+
+  @@index([userId, year, typeCode])
+  @@index([requestId])
+}
+
+/// 节假日与调休上班日：HOLIDAY 放假（工作日也不上班）/ WORKDAY 调休上班（周末也上班）
+model Holiday {
+  date      String   @id @db.VarChar(10)
+  kind      String   @db.VarChar(8)
+  name      String?  @db.VarChar(50)
+  updatedAt DateTime @updatedAt
+}
+
+/// 应用设置（人事在「设置」里改，即改即生效）
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedBy Int?
+  updatedAt DateTime @updatedAt
+}
+
+/// 操作留痕
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int?
+  via        String   @db.VarChar(6)
+  action     String   @db.VarChar(40)
+  entityType String?  @db.VarChar(20)
+  entityId   String?  @db.VarChar(40)
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

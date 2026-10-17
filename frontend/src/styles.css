@@ -1,0 +1,54 @@
+/* 颜色、圆角都走变量；接入平台后由 theme.js 按平台外观覆盖 */
+:root {
+  --hr-primary: #0f766e;
+  --hr-on-primary: #ffffff;
+  --hr-primary-soft: #e7f1f0;
+  --hr-accent: #d2521e;
+  --hr-bg: #f6f7f8;
+  --hr-surface: #ffffff;
+  --hr-text: #1f2328;
+  --hr-muted: #6b7280;
+  --hr-border: #e5e7eb;
+  --hr-radius: 10px;
+  --hr-font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --hr-ok: #16a34a;
+  --hr-warn: #d97706;
+  --hr-danger: #dc2626;
+  --el-color-primary: #0f766e;
+  --el-color-primary-light-3: #57a19a;
+  --el-color-primary-light-5: #87bbb7;
+  --el-color-primary-light-7: #b7d6d4;
+  --el-color-primary-light-8: #cfe4e2;
+  --el-color-primary-light-9: #e7f1f0;
+  --el-color-primary-dark-2: #0c5e58;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--hr-bg); color: var(--hr-text); font-family: var(--hr-font); font-size: 14px; }
+body { overflow-x: hidden; }
+a { color: var(--hr-primary); text-decoration: none; }
+
+.page { padding: 20px 24px; max-width: 1280px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card { background: var(--hr-surface); border: 1px solid var(--hr-border); border-radius: var(--hr-radius); padding: 16px; margin-bottom: 16px; }
+.card h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+.muted { color: var(--hr-muted); }
+.small { font-size: 12px; }
+.table-wrap { width: 100%; overflow-x: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tile { background: var(--hr-surface); border: 1px solid var(--hr-border); border-radius: var(--hr-radius); padding: 12px 14px; }
+.tile .v { font-size: 22px; font-weight: 600; }
+.tile .k { color: var(--hr-muted); font-size: 12px; margin-top: 2px; }
+.tile.bad .v { color: var(--hr-danger); }
+.tile.warn .v { color: var(--hr-warn); }
+.tile.good .v { color: var(--hr-ok); }
+.link { color: var(--hr-primary); cursor: pointer; }
+.pre { white-space: pre-wrap; }
+.help { color: var(--hr-muted); font-size: 12px; line-height: 1.6; margin: 4px 0 8px; }
+
+@media (max-width: 760px) {
+  .page { padding: 14px 16px; }
+  .page-head h2 { font-size: 18px; }
+}
