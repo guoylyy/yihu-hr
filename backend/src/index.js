@@ -28,6 +28,15 @@ app.use(express.json({ limit: '1mb' }))
 // MCP 自己校验平台带来的 access_token
 mountMcp(app)
 
+// 前端构建产物（生产环境）。脚本、样式是公开的构建文件，要放在登录检查前面：
+// SDK 对 publicPaths 放行但不带出用户，后面的「要登录」会把它们都拦成 401，页面就是一片白
+const STATIC_DIR = process.env.STATIC_DIR && path.resolve(process.env.STATIC_DIR)
+const hasStatic = !!(STATIC_DIR && fs.existsSync(STATIC_DIR))
+if (hasStatic) {
+  app.use('/assets', express.static(path.join(STATIC_DIR, 'assets'), { index: false, maxAge: '7d', immutable: true }))
+  app.use('/assets', (req, res) => res.status(404).end()) // 旧版本的文件名（发布后还开着的老页面）：404，不要回落到 index.html
+}
+
 // 统一登录：/sso/callback；其余要登录（/api 未登录回 401，页面跳平台授权）
 app.use(ws.middleware({ publicPaths: ['/health', '/mcp', '/assets/', '/favicon'] }))
 app.use((req, res, next) => {
@@ -39,10 +48,8 @@ app.use((req, res, next) => {
 })
 app.use('/api', api)
 
-// 前端构建产物（生产环境）；单页应用用 hash 路由，所以只有 index.html 一个入口
-const STATIC_DIR = process.env.STATIC_DIR && path.resolve(process.env.STATIC_DIR)
-if (STATIC_DIR && fs.existsSync(STATIC_DIR)) {
-  app.use(express.static(STATIC_DIR, { index: false, maxAge: '7d' }))
+// 页面入口要登录（没登录的已经被上面跳去平台授权）；单页应用用 hash 路由，所以只有 index.html 一个入口
+if (hasStatic) {
   app.get('*', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache')
     res.sendFile(path.join(STATIC_DIR, 'index.html'))
