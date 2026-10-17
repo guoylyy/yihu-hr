@@ -33,13 +33,14 @@ import { me } from './me.js'
 
 const drawer = ref(false)
 const items = computed(() => [
+  // 人员全景放最上面（人事和负责人登录后默认也进这里）
+  ...(me.team ? [{ to: '/people', label: '人员全景' }] : []),
   { group: '考勤' },
   { to: '/my', label: '我的考勤' },
   { to: '/leave', label: '请假' },
   ...(me.approver || me.hr ? [{ to: '/approvals', label: '审批' }] : []),
   ...(me.team ? [{ to: '/team', label: '团队考勤' }, { to: '/report', label: '月度报表' }] : []),
   { group: '人员' },
-  ...(me.team ? [{ to: '/people', label: '人员全景' }] : []),
   { to: '/people/me', label: '我的档案' },
   { to: '/one-on-ones', label: '1v1' },
   ...(me.contracts ? [{ to: '/contracts', label: '合同' }] : []),
