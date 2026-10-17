@@ -9,7 +9,10 @@
 
     <div :class="hasRoster ? 'layout' : ''">
       <div v-if="hasRoster" class="card roster">
-        <div class="muted small" style="margin-bottom: 6px">{{ roster.isHr ? '全公司' : '我的下属' }} · 建议每 {{ roster.cadence || '—' }} 天一次</div>
+        <div class="person" :class="{ on: selected === 'me' }" @click="select('me')">
+          <div><b>我自己</b><div class="muted small">我和我的负责人的 1v1</div></div>
+        </div>
+        <div class="muted small" style="margin: 10px 0 6px">{{ roster.isHr ? '全公司' : '我的下属' }} · 建议每 {{ roster.cadence || '—' }} 天一次</div>
         <div v-for="r in roster.rows" :key="r.employee.id" class="person" :class="{ on: selected === r.employee.id }" @click="select(r.employee.id)">
           <div>
             <b>{{ r.employee.name }}</b>
@@ -57,7 +60,8 @@ const router = useRouter()
 const keyword = ref('')
 const roster = ref({ rows: [] })
 const list = ref(null)
-const selected = ref(Number(route.query.user) || null)
+// 选中的人：同事的 id，或 'me'（自己被谈的记录）；员工没有名单，只看自己的
+const selected = ref(route.query.user === 'me' ? 'me' : Number(route.query.user) || null)
 const hasRoster = computed(() => me.oneOnOne)
 
 async function loadRoster() {
@@ -65,7 +69,7 @@ async function loadRoster() {
   roster.value = await api.get('one-on-ones/roster', { keyword: keyword.value })
 }
 async function loadList() {
-  list.value = await api.get('one-on-ones', selected.value ? { userId: selected.value } : {})
+  list.value = await api.get('one-on-ones', selected.value && selected.value !== 'me' ? { userId: selected.value } : {})
 }
 function select(id) {
   selected.value = id
