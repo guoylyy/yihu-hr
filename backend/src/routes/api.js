@@ -15,6 +15,7 @@ import * as cost from '../services/cost.js'
 import * as people from '../services/people.js'
 import * as oneOnOne from '../services/oneOnOne.js'
 import { contractScope, costScope } from '../services/access.js'
+import { VERSION } from '../lib/version.js'
 
 const r = Router()
 const id = (req) => Number(req.params.id)
@@ -27,6 +28,7 @@ r.get('/me', wrap(async (req) => {
     hr: await isHr(ctx), team: await canSeeTeam(ctx),
     contracts: await contractScope(ctx).then(sc => sc.all || sc.ids.size > 1), cost: await costScope(ctx).then(sc => sc.all || sc.ids.size > 0),
     oneOnOne: await canSeeTeam(ctx), approver: (await leave.pendingForMe(ctx)).length > 0 || !!ctx.user.leaderOf?.length || await isHr(ctx),
+    version: VERSION,
     platform: { connected: ws.enabled, url: info?.platformUrl || null },
     brand: info?.brand || null,
     sources: PROVIDERS.filter(p => p.configured()).map(p => ({ source: p.source, label: p.label }))

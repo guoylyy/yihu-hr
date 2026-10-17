@@ -9,6 +9,7 @@ import api from './routes/api.js'
 import { touchEmployee } from './services/directory.js'
 import { seedLeaveTypes } from './services/leave.js'
 import { startScheduler } from './services/sync.js'
+import { VERSION } from './lib/version.js'
 
 const app = express()
 app.set('trust proxy', true)
@@ -18,7 +19,7 @@ app.disable('x-powered-by')
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
-    res.json({ ok: true })
+    res.json({ ok: true, version: VERSION })
   } catch {
     res.status(503).json({ ok: false, error: '数据库连不上' })
   }
@@ -68,7 +69,7 @@ async function main() {
   if (process.env.NODE_ENV !== 'test') startScheduler()
   const port = Number(process.env.PORT) || 3000
   const mode = ws.enabled ? '' : devUser() ? '（本地开发模式：未接入平台）' : '（未接入平台：缺 YH_CLIENT_ID 等，所有请求都会 401）'
-  app.listen(port, () => console.log(`[hr] listening on :${port}${mode}`))
+  app.listen(port, () => console.log(`[hr] v${VERSION} listening on :${port}${mode}`))
 }
 
 main().catch((e) => {

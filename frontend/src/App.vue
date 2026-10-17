@@ -1,7 +1,7 @@
 <template>
   <div class="shell">
     <aside class="side">
-      <div class="brand">人事考勤</div>
+      <div class="brand">人事考勤<span v-if="me.version" class="ver" title="人事考勤的版本，更新说明见 CHANGELOG">v{{ me.version }}</span></div>
       <NavList :items="items" />
       <div class="who">
         <span>{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></span>
@@ -15,6 +15,7 @@
     </header>
     <el-drawer v-model="drawer" direction="ltr" size="220px" :with-header="false">
       <NavList :items="items" @go="drawer = false" />
+      <div v-if="me.version" class="muted small" style="padding: 10px 12px 0">人事考勤 v{{ me.version }}</div>
       <a href="logout" class="logout drawer-logout">退出（{{ me.user?.name }}）</a>
     </el-drawer>
     <main class="main">
@@ -51,6 +52,7 @@ const items = computed(() => [
 .shell { display: flex; min-height: 100vh; }
 .side { width: 200px; flex: none; background: var(--hr-surface); border-right: 1px solid var(--hr-border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
 .brand { font-weight: 600; font-size: 16px; padding: 18px 20px; color: var(--hr-primary); }
+.ver { margin-left: 6px; font-size: 11px; font-weight: normal; color: var(--hr-muted); }
 .who { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hr-border); color: var(--hr-muted); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .logout { color: var(--hr-muted); text-decoration: none; font-size: 13px; }
 .logout:hover { color: var(--hr-primary); }

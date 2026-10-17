@@ -11,6 +11,7 @@ cd backend && npx prisma migrate dev --name <名称>   # 改 schema.prisma 后�
 cd frontend && npm run dev                  # :5186
 cd frontend && npm run build                # 前端没有测试，至少确认能构建
 ./release.sh                                # 发布（只在 main 上，测试过了才推 release）
+./bump-version.sh 0.3.0                     # 改版本号（前后端 package.json + CHANGELOG.md 一节待填；只用它改）
 ```
 
 ## 约定

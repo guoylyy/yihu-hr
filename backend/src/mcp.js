@@ -14,6 +14,7 @@ import * as contracts from './services/contracts.js'
 import * as people from './services/people.js'
 import * as oneOnOne from './services/oneOnOne.js'
 import { contractScope } from './services/access.js'
+import { VERSION } from './lib/version.js'
 
 const RO = { readOnlyHint: true }
 
@@ -243,7 +244,7 @@ export function mountMcp(app) {
     const reply = (result) => res.json({ jsonrpc: '2.0', id, result })
     const fail = (code, message) => res.json({ jsonrpc: '2.0', id, error: { code, message } })
     if (id === undefined) return res.status(202).end()
-    if (method === 'initialize') return reply({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'hr', version: '0.2.0' } })
+    if (method === 'initialize') return reply({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'hr', version: VERSION } })
     if (method === 'ping') return reply({})
     if (method === 'tools/list') return reply({ tools: TOOLS.map(({ run, ...t }) => t) })
     if (method === 'tools/call') {
