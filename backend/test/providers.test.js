@@ -247,3 +247,41 @@ test('钉钉逐条补查：请假补上类型，挂了审批的打卡日拿出�
   assert.equal(dingtalk.approvalHint({ vendorUserId: 'u1', workDate: '2026-10-19', raw: { procInstId: 'P2' } }).key, 'proc:P2')
   assert.equal(dingtalk.approvalHint({ vendorUserId: 'u1', workDate: '2026-10-19', raw: {} }), null)
 })
+
+// ---------- 档案补全 ----------
+
+test('钉钉档案：配了 AgentId 读花名册（一次 100 人）；没配读通讯录详情、限量', async () => {
+  process.env.DINGTALK_APP_KEY = 'k'; process.env.DINGTALK_APP_SECRET = 's'
+  dingtalk._token.reset()
+  const ids = Array.from({ length: 120 }, (_, i) => `u${i}`)
+  const calls = stub({
+    '/gettoken': { errcode: 0, access_token: 'T', expires_in: 7200 },
+    '/smartwork/hrm/employee/v2/list': (c) => ({ errcode: 0, result: c.body.userid_list.split(',').map(userid => ({ userid, field_data_list: [{ field_code: 'sys00-confirmJoinTime', field_value_list: [{ value: '2021-03-01' }] }] })) }),
+    '/topapi/v2/user/get': (c) => (c.body.userid === 'u1' ? { errcode: 60121, errmsg: '找不到该用户' } : { errcode: 0, result: { job_number: 'E' + c.body.userid, hired_date: Date.parse('2020-01-02T00:00:00+08:00') } })
+  })
+  const roster = await dingtalk.fetchProfiles(ids, { agentId: '123', tz: TZ })
+  assert.equal(roster.size, 120)
+  assert.deepEqual(roster.get('u5'), { hireDate: '2021-03-01' })
+  const q = calls.filter(c => c.url.includes('/v2/list'))
+  assert.equal(q.length, 2)
+  assert.equal(q[0].body.agentid, 123)
+  assert.ok(q[0].body.field_filter_list.includes('sys02-birthTime'))
+  const basic = await dingtalk.fetchProfiles(['u0', 'u1', 'u2'], { tz: TZ, maxBasic: 2 })
+  assert.deepEqual([...basic.keys()], ['u0'])
+  assert.deepEqual(basic.get('u0'), { jobNumber: 'Eu0', hireDate: '2020-01-02' })
+  assert.equal(basic.skipped, 1)
+})
+
+test('飞书档案：通讯录批量接口一次 50 人，按 open_id', async () => {
+  process.env.FEISHU_APP_ID = 'a'; process.env.FEISHU_APP_SECRET = 'b'
+  feishu._token.reset()
+  const calls = stub({
+    '/tenant_access_token': { code: 0, tenant_access_token: 'T', expire: 7200 },
+    '/contact/v3/users/batch': (c) => ({ code: 0, data: { items: [...new URL(c.url).searchParams.getAll('user_ids')].map(id => ({ open_id: id, employee_no: 'F' + id, gender: 2 })) } })
+  })
+  const ids = Array.from({ length: 60 }, (_, i) => `ou_${i}`)
+  const out = await feishu.fetchProfiles(ids, { tz: TZ })
+  assert.equal(out.size, 60)
+  assert.deepEqual(out.get('ou_3'), { jobNumber: 'Fou_3', gender: 'F' })
+  assert.equal(calls.filter(c => c.url.includes('/users/batch')).length, 2)
+})

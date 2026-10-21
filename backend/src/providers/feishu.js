@@ -6,7 +6,8 @@
 //       https://open.feishu.cn/document/server-docs/attendance-v1/user_approval/query
 import { callJson, tokenCache } from './http.js'
 import { platformAvailable, platformToken, resetPlatformToken } from './platformToken.js'
-import { dayInTz, zonedTime } from '../lib/dates.js'
+import { chunk, dayInTz, zonedTime } from '../lib/dates.js'
+import { fromFeishuUser } from '../lib/vendorProfile.js'
 
 const API = 'https://open.feishu.cn/open-apis'
 const env = () => ({ id: process.env.FEISHU_APP_ID || '', secret: process.env.FEISHU_APP_SECRET || '' })
@@ -165,5 +166,17 @@ export default {
     return [...seen.values()]
   },
   resolveUserIds,
+  /** 档案（补全用）：Map(open_id -> 档案字段)，通讯录批量接口一次 50 人 */
+  async fetchProfiles(openIds, { tz } = {}) {
+    const out = new Map()
+    for (const part of chunk(openIds, 50)) {
+      const q = part.map(id => `user_ids=${encodeURIComponent(id)}`).join('&')
+      const data = await api(`/contact/v3/users/batch?user_id_type=open_id&${q}`)
+      for (const u of data.items || []) if (u.open_id) out.set(u.open_id, fromFeishuUser(u, tz))
+    }
+    return out
+  },
+  profileIdOf: (emp) => emp.feishuOpenId || null,
+  profileHint: '要在飞书开发者后台给这个应用开通通讯录的「获取用户基本信息」「获取用户受雇信息」（工号、入职时间、人员类型）权限',
   _token: token
 }

@@ -10,6 +10,8 @@ export const SCHEMA = [
   { key: 'syncEnabled', label: '自动同步打卡', type: 'boolean', default: true },
   { key: 'syncIntervalMinutes', label: '同步间隔（分钟）', type: 'number', default: 30, min: 10, max: 1440 },
   { key: 'syncLookbackDays', label: '每次重拉最近几天', type: 'number', default: 3, min: 1, max: 31, help: '补卡、审批、撤销请假会改动前几天的结果，所以每次都重拉最近几天' },
+  { key: 'profileSync', label: '每天从钉钉 / 飞书补全档案', type: 'boolean', default: true, help: '入职日期、转正日期、出生日期、性别、学历、用工类型等：空的补上，钉钉 / 飞书上改了的跟着改，两边不一样的在「打卡同步」里让你选' },
+  { key: 'dingAgentId', label: '钉钉应用的 AgentId', type: 'string', default: '', pattern: '^\\d*$', help: '填了才能读钉钉智能人事的花名册（转正、出生日期、学历、用工类型……），在钉钉开发者后台「应用信息」里看；不填只能读工号和入职日期' },
   { key: 'absenceAheadDays', label: '请假 / 出差往后多拉几天', type: 'number', default: 30, min: 0, max: 90, help: '提前请好的假、排好的出差也能在日历上看到' },
   { key: 'workStart', label: '上班时间', type: 'time', default: '09:00', help: '按小时请的假、跨天的出差按和上下班时段的重叠折算到每天' },
   { key: 'workEnd', label: '下班时间', type: 'time', default: '18:00' },
@@ -48,6 +50,7 @@ function check(f, v) {
       return [...new Set(v)].sort()
     default: {
       const s = String(v ?? '').trim()
+      if (f.pattern && !new RegExp(f.pattern).test(s)) throw badRequest(`${f.label} 的格式不对`)
       if (f.key === 'timezone') {
         try { new Intl.DateTimeFormat('en', { timeZone: s }) } catch { throw badRequest(`不认识的时区：${s}`) }
       }

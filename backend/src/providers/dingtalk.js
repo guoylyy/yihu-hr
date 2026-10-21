@@ -8,7 +8,8 @@
 //       https://open.dingtalk.com/document/orgapp/obtain-the-attendance-update-data
 import { callJson, tokenCache } from './http.js'
 import { platformAvailable, platformToken, resetPlatformToken } from './platformToken.js'
-import { addDays, dayInTz, zonedTime } from '../lib/dates.js'
+import { addDays, chunk, dayInTz, zonedTime } from '../lib/dates.js'
+import { DING_ROSTER_FIELDS, fromDingRoster, fromDingUser } from '../lib/vendorProfile.js'
 
 const API = 'https://oapi.dingtalk.com'
 const env = () => ({ key: process.env.DINGTALK_APP_KEY || '', secret: process.env.DINGTALK_APP_SECRET || '' })
@@ -182,6 +183,35 @@ export default {
     list.pending = Math.max(0, todo.size - DETAIL_MAX)
     return list
   },
+  /**
+   * 档案（补全用）：Map(钉钉 userId -> 档案字段)。
+   * 配了 AgentId（设置里）读智能人事花名册（一次 100 人，字段全）；没配读通讯录详情（一人一次，只有工号、入职时间，最多 maxBasic 人）
+   */
+  async fetchProfiles(ids, { agentId, tz, maxBasic = 300 } = {}) {
+    const out = new Map()
+    if (agentId) {
+      for (const part of chunk(ids, 100)) {
+        const j = await callJson('钉钉', `${API}/topapi/smartwork/hrm/employee/v2/list?access_token=${await token()}`, {
+          method: 'POST', body: { userid_list: part.join(','), field_filter_list: Object.keys(DING_ROSTER_FIELDS).join(','), agentid: Number(agentId) }
+        })
+        if (j.errcode === 40014 || j.errcode === 42001) token.reset()
+        if (j.errcode !== 0) throw new Error(`钉钉智能人事花名册接口出错（${j.errcode}）：${j.errmsg}`)
+        for (const item of j.result || []) out.set(item.userid, fromDingRoster(item))
+      }
+      return out
+    }
+    for (const userid of ids.slice(0, maxBasic)) {
+      const j = await callJson('钉钉', `${API}/topapi/v2/user/get?access_token=${await token()}`, { method: 'POST', body: { userid } })
+      if (j.errcode === 40014 || j.errcode === 42001) token.reset()
+      if (j.errcode === 60121) continue // 找不到这个人（已经离开钉钉组织）
+      if (j.errcode !== 0) throw new Error(`钉钉通讯录接口出错（${j.errcode}）：${j.errmsg}`)
+      out.set(userid, fromDingUser(j.result || {}, tz))
+    }
+    out.skipped = Math.max(0, ids.length - maxBasic)
+    return out
+  },
+  profileIdOf: (emp) => emp.dingUserId || null,
+  profileHint: '读钉钉通讯录要开通「成员信息读权限」；在「设置 → 规则」填上钉钉应用的 AgentId 并开通「智能人事花名册」读权限，能读到转正日期、出生日期、性别、学历、用工类型等',
   /** 打卡记录上挂了审批实例的（出差、外出、请假时钉钉会挂上）→ 逐天补查的线索 */
   approvalHint: (p) => (p.raw?.procInstId ? { userid: p.vendorUserId, day: p.workDate, key: `proc:${p.raw.procInstId}` } : null),
   _token: token

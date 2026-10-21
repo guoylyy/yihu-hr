@@ -13,6 +13,7 @@ import { getSettings } from './settings.js'
 import { requireHr } from './access.js'
 import { audit } from './audit.js'
 import { syncDirectory } from './directory.js'
+import { syncProfiles } from './profileSync.js'
 import { cancelMissing, saveAbsences } from './absences.js'
 import { platformError, refreshPlatformChannels } from '../providers/platformToken.js'
 const PLATFORM_KEY = { DINGTALK: 'dingtalk', FEISHU: 'feishu' }
@@ -180,9 +181,11 @@ export async function manualSync(ctx, { source, from, to } = {}) {
   if ((from && !isDateStr(from)) || (to && !isDateStr(to))) throw badRequest('日期格式是 YYYY-MM-DD')
   if (from && to && (from > to || diffDays(from, to) > 61)) throw badRequest('一次最多同步 62 天')
   if (source === 'DIRECTORY') {
+    // 拉完平台通讯录接着从钉钉 / 飞书补全档案（和每天的定时同步一样）
     const r = await syncDirectory({ full: true, trigger: 'MANUAL' })
-    audit(ctx, 'sync.directory', { detail: r })
-    return [r]
+    const p = await syncProfiles({ trigger: 'MANUAL' }).catch(e => ({ error: e.message }))
+    audit(ctx, 'sync.directory', { detail: { ...r, profiles: p.people ?? null } })
+    return [{ source: 'DIRECTORY', ...r }, { source: 'PROFILE', ...p }]
   }
   const out = source ? [await syncSource(source, { from, to, trigger: 'MANUAL' })] : await syncAll({ from, to, trigger: 'MANUAL' })
   audit(ctx, 'sync.run', { entityType: 'sync', detail: { source: source || 'ALL', from, to } })
@@ -241,6 +244,8 @@ export function startScheduler() {
         const full = now - lastDirFull > 24 * 3600_000
         if (full) lastDirFull = now
         await syncDirectory({ full }).catch(e => console.warn(`[hr] 通讯录同步失败：${e.message}`))
+        // 每天全量拉完平台通讯录后，从钉钉 / 飞书补全一次档案
+        if (full) await syncProfiles().catch(e => console.warn(`[hr] 补全档案失败：${e.message}`))
       }
       if (s.syncEnabled && now - lastRun > s.syncIntervalMinutes * 60_000) {
         lastRun = now

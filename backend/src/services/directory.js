@@ -1,4 +1,5 @@
-// 员工 = 平台用户主数据的本地副本。每小时增量、每天全量从 /api/open/users 拉；对人以平台为准，应用里不改姓名部门
+// 员工 = 平台用户主数据的本地副本。每小时增量、每天全量从 /api/open/users 拉；对人以平台为准，应用里不改姓名部门。
+// 拉完之后再从钉钉 / 飞书补全档案（入职日期、工号……，见 services/profileSync.js）
 import { prisma } from '../lib/prisma.js'
 import { fetchUsers, ws } from '../lib/platform.js'
 
@@ -6,7 +7,8 @@ function fromPlatform(u) {
   const depts = (u.depts || []).map(d => ({ id: d.id, name: d.name, path: d.path || d.name, isPrimary: !!d.isPrimary }))
   const primary = depts.find(d => d.isPrimary) || depts[0]
   return {
-    name: u.name, jobNumber: u.jobNumber || null, title: u.title || null, avatar: u.avatar || null, spaceId: u.spaceId || 1,
+    // 平台没有工号时不清掉这里的（可能是从钉钉 / 飞书补全来的）；平台有就以平台为准
+    name: u.name, ...(u.jobNumber ? { jobNumber: u.jobNumber } : {}), title: u.title || null, avatar: u.avatar || null, spaceId: u.spaceId || 1,
     depts, deptId: primary?.id ?? null, deptPath: primary?.path ?? null, active: !!u.active,
     dingUserId: u.dingUserId || null, feishuOpenId: u.feishuOpenId || null, wecomUserId: u.wecomUserId || null, syncedAt: new Date()
   }
@@ -17,9 +19,10 @@ export async function syncDirectory({ full = false, trigger = 'AUTO' } = {}) {
   if (!ws.enabled) return { skipped: '未接入平台（本地开发模式）' }
   const run = await prisma.syncRun.create({ data: { source: 'DIRECTORY', trigger } })
   try {
-    const last = full ? null : await prisma.employee.aggregate({ _max: { syncedAt: true } })
+    // 增量：从上一次成功同步开始的时间算（不能用员工表里最新的 syncedAt：本人登录时会先建一条，会把时间推后、漏掉别人的改动）
+    const last = full ? null : await prisma.syncRun.findFirst({ where: { source: 'DIRECTORY', ok: true, id: { not: run.id } }, orderBy: { id: 'desc' } })
     // 往前多拉 10 分钟，避免时钟差漏人
-    const since = last?._max.syncedAt ? new Date(last._max.syncedAt.getTime() - 600_000) : null
+    const since = last ? new Date(last.startedAt.getTime() - 600_000) : null
     const data = await fetchUsers({ updatedSince: since })
     for (const u of data.list) {
       const row = fromPlatform(u)

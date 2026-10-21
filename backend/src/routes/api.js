@@ -16,6 +16,7 @@ import * as people from '../services/people.js'
 import * as oneOnOne from '../services/oneOnOne.js'
 import * as absences from '../services/absences.js'
 import * as importer from '../services/importer.js'
+import * as profileSync from '../services/profileSync.js'
 import { contractScope, costScope } from '../services/access.js'
 import { VERSION } from '../lib/version.js'
 
@@ -121,5 +122,8 @@ r.post('/holidays/import', wrap(req => holidays.importHolidays(req.ctx, req.body
 r.delete('/holidays/:date', wrap(req => holidays.deleteHoliday(req.ctx, req.params.date)))
 r.get('/sync/status', wrap(req => sync.syncStatus(req.ctx)))
 r.post('/sync/run', wrap(req => sync.manualSync(req.ctx, req.body)))
+r.get('/sync/profiles', wrap(req => profileSync.profileSyncStatus(req.ctx)))
+r.post('/sync/profiles', wrap(req => profileSync.manualSyncProfiles(req.ctx)))
+r.post('/sync/profiles/resolve', wrap(req => profileSync.resolveConflicts(req.ctx, req.body)))
 
 export default r

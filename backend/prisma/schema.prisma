@@ -61,6 +61,9 @@ model Employee {
   exemption     String?   @db.VarChar(10)
   /// 豁免原因（如「董事会成员」「外派」）
   exemptNote    String?   @db.VarChar(100)
+  /// 上次从钉钉 / 飞书读到的档案：{ DINGTALK: { hireDate, gender, …, at }, FEISHU: {…} }。
+  /// 三方比对用：钉钉上的值变了 → 更新这里；没变而这里改过 → 保留这里的（不来回覆盖）
+  vendorSnapshot Json?
   syncedAt      DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -393,5 +396,24 @@ model NameAlias {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
+}
+
+/// 从钉钉 / 飞书补全档案时的改动和冲突：APPLIED 已按钉钉 / 飞书更新；CONFLICT 第一次比对两边不一样，等人事选；
+/// RESOLVED 人事选过了（resolution：VENDOR 用钉钉 / 飞书的 / APP 保留这里的）
+model ProfileChange {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  source     String    @db.VarChar(10)
+  field      String    @db.VarChar(20)
+  before     String?   @db.VarChar(200)
+  after      String?   @db.VarChar(200)
+  kind       String    @db.VarChar(10)
+  resolution String?   @db.VarChar(6)
+  resolvedBy Int?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([kind, createdAt])
   @@index([userId])
 }
