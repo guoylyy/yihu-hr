@@ -1,10 +1,12 @@
 // 飞书考勤：打卡结果 POST /attendance/v1/user_tasks/query（一次最多 50 人）
 // 考勤接口只认 user_id（employee_id）或工号（employee_no），平台给的是 open_id：
 // 先用通讯录接口把 open_id 换成 user_id（缓存在 Employee.feishuUserId），换不到的人有工号就按工号查
+// 请假、出差、外出：POST /attendance/v1/user_approvals/query（一次最多 50 人，只要已通过的）
 // 文档：https://open.feishu.cn/document/server-docs/attendance-v1/user_task/query
+//       https://open.feishu.cn/document/server-docs/attendance-v1/user_approval/query
 import { callJson, tokenCache } from './http.js'
 import { platformAvailable, platformToken, resetPlatformToken } from './platformToken.js'
-import { dayInTz } from '../lib/dates.js'
+import { dayInTz, zonedTime } from '../lib/dates.js'
 
 const API = 'https://open.feishu.cn/open-apis'
 const env = () => ({ id: process.env.FEISHU_APP_ID || '', secret: process.env.FEISHU_APP_SECRET || '' })
@@ -70,6 +72,47 @@ export function normalize(t, tz) {
   return out
 }
 
+/** 飞书的 'YYYY-MM-DD HH:mm:ss'（企业时区）→ Date */
+const parseTime = (t, tz) => {
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(String(t || ''))
+  return m ? zonedTime(m[1], m[2], tz) : null
+}
+// 请假时长单位：1 天、2 小时、3 半天、4 半小时；interval 是秒
+const LEAVE_HOURS = { 2: true, 4: true }
+
+/**
+ * 飞书一个人一天的审批（user_approval）→ 统一形状的假勤记录。
+ * 跨几天的假每天都会出现一次，按审批实例去重（调用方按 externalId 合并）
+ */
+export function normalizeApprovals(ua, tz) {
+  const out = []
+  const item = (category, x, typeName) => {
+    const startAt = parseTime(x.start_time, tz)
+    const endAt = parseTime(x.end_time, tz)
+    if (!startAt || !endAt) return
+    const hourly = category !== 'TRIP' && LEAVE_HOURS[x.unit] && Number(x.interval) > 0
+    out.push({
+      source: 'FEISHU',
+      externalId: `${category}:${x.uniq_id || x.approval_id}`,
+      vendorUserId: ua.user_id,
+      category,
+      typeName,
+      startAt, endAt,
+      startDate: dayInTz(startAt, tz),
+      endDate: dayInTz(new Date(Math.max(startAt.getTime(), endAt.getTime() - 1)), tz),
+      days: null,
+      hours: hourly ? Math.round(Number(x.interval) / 36) / 100 : null,
+      approvalId: x.approval_id ? String(x.approval_id) : null,
+      // 事由不存
+      raw: { ...x, reason: undefined }
+    })
+  }
+  for (const x of ua.leaves || []) item('LEAVE', x, x.i18n_names?.ch || x.i18n_names?.zh_cn || x.i18n_names?.en || null)
+  for (const x of ua.trips || []) item('TRIP', x, '出差')
+  for (const x of ua.outs || []) item('OUT', x, x.i18n_names?.ch || '外出')
+  return out
+}
+
 export default {
   source: 'FEISHU',
   label: '飞书',
@@ -99,6 +142,25 @@ export default {
       }
     }
     return out
+  },
+  absenceBatchUsers: 50,
+  absenceMaxDays: 30,
+  /** 已通过的请假、出差、外出。ids 同 fetch */
+  async fetchAbsences(ids, from, to, tz) {
+    const byId = ids.filter(x => !x.startsWith('no:'))
+    const byNo = ids.filter(x => x.startsWith('no:')).map(x => x.slice(3))
+    const seen = new Map()
+    const d = (s) => Number(s.replaceAll('-', ''))
+    for (const [type, list, prefix] of [['employee_id', byId, ''], ['employee_no', byNo, 'no:']]) {
+      if (!list.length) continue
+      const data = await api(`/attendance/v1/user_approvals/query?employee_type=${type}`, {
+        method: 'POST', body: { user_ids: list, check_date_from: d(from), check_date_to: d(to), status: 2 }
+      })
+      for (const ua of data.user_approvals || []) {
+        for (const a of normalizeApprovals(ua, tz)) seen.set(a.externalId, { ...a, vendorUserId: prefix + a.vendorUserId })
+      }
+    }
+    return [...seen.values()]
   },
   resolveUserIds,
   _token: token

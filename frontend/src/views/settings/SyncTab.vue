@@ -1,6 +1,6 @@
 <template>
   <div v-loading="loading">
-    <p class="help">平台通讯录 {{ status?.employees ?? '-' }} 人。钉钉、飞书直接用以虎 One「管理 → 登录方式」里配好的那个应用（不用再配密钥，但要在开发者后台给它开通考勤权限）；企业微信打卡要单独的「打卡」应用 Secret，写进服务器上的 <code>apps/hr/.env</code>。</p>
+    <p class="help">平台通讯录 {{ status?.employees ?? '-' }} 人。每次同步拉打卡结果，以及审批通过的请假、出差、外出（钉钉只有请假）。钉钉、飞书直接用以虎 One「管理 → 登录方式」里配好的那个应用（不用再配密钥，但要在开发者后台给它开通考勤权限）；企业微信打卡要单独的「打卡」应用 Secret，写进服务器上的 <code>apps/hr/.env</code>。</p>
     <div v-for="s in status?.sources || []" :key="s.source" class="card">
       <div class="head">
         <h3>{{ s.label }}</h3>
@@ -24,7 +24,8 @@
               <el-tag v-else size="small" type="info">进行中</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="拉取 / 保存" min-width="90"><template #default="{ row }">{{ row.fetched }} / {{ row.saved }}</template></el-table-column>
+          <el-table-column label="打卡 拉取 / 保存" min-width="110"><template #default="{ row }">{{ row.fetched }} / {{ row.saved }}</template></el-table-column>
+          <el-table-column label="请假等" min-width="64"><template #default="{ row }">{{ row.absences }}</template></el-table-column>
           <el-table-column label="说明" min-width="200"><template #default="{ row }"><span :class="{ bad: row.ok === false }">{{ row.error }}</span></template></el-table-column>
         </el-table>
       </div>
@@ -38,7 +39,7 @@
 
     <div class="card">
       <h3>补拉历史</h3>
-      <p class="help">把一段时间的打卡重新从所有已配置的来源拉一遍（一次最多 62 天）。重复拉不会重复记。</p>
+      <p class="help">把一段时间的打卡和请假 / 出差 / 外出重新从所有已配置的来源拉一遍（一次最多 62 天）。重复拉不会重复记、不会重复扣余额。</p>
       <div class="toolbar">
         <el-date-picker v-model="range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" style="width: 260px" />
         <el-button type="primary" :disabled="!range" :loading="busy === 'ALL'" @click="run({ from: range[0], to: range[1] }, 'ALL')">开始</el-button>
@@ -70,7 +71,9 @@ async function run(body, key) {
     const out = await api.post('sync/run', body)
     const errs = out.filter(r => r.error)
     const skipped = out.filter(r => r.skipped)
+    const warns = out.filter(r => r.warning)
     if (errs.length) ElMessage.error(errs.map(e => `${e.source}：${e.error}`).join('；'))
+    else if (warns.length) ElMessage.warning(`打卡同步完成；${warns.map(w => `${w.source}${w.warning}`).join('；')}`)
     else if (skipped.length && skipped.length === out.length) ElMessage.info(skipped.map(s => s.skipped).join('；'))
     else ElMessage.success('同步完成')
   } finally {

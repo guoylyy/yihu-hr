@@ -11,6 +11,7 @@
           <el-checkbox-group v-else-if="f.type === 'weekdays'" v-model="values[f.key]">
             <el-checkbox v-for="d in [1, 2, 3, 4, 5, 6, 0]" :key="d" :value="d">周{{ WEEK[d] }}</el-checkbox>
           </el-checkbox-group>
+          <el-time-select v-else-if="f.type === 'time'" v-model="values[f.key]" start="06:00" step="00:30" end="23:30" :clearable="false" style="width: 140px" />
           <el-input v-else v-model="values[f.key]" style="width: 240px" />
           <div v-if="f.help" class="help">{{ f.help }}</div>
         </div>

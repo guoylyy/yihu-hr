@@ -15,7 +15,7 @@
         <div class="muted small" style="margin: 10px 0 6px">{{ roster.isHr ? '全公司' : '我的下属' }} · 建议每 {{ roster.cadence || '—' }} 天一次</div>
         <div v-for="r in roster.rows" :key="r.employee.id" class="person" :class="{ on: selected === r.employee.id }" @click="select(r.employee.id)">
           <div>
-            <b>{{ r.employee.name }}</b>
+            <b>{{ r.employee.name }}</b><ExemptTag :value="r.employee.exemption === 'FULL' ? 'FULL' : null" />
             <div class="muted small">{{ r.employee.deptPath }}</div>
           </div>
           <div class="right small">
@@ -51,6 +51,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api.js'
+import ExemptTag from '../components/ExemptTag.vue'
 import { me } from '../me.js'
 import OneOnOneCard from '../components/OneOnOneCard.vue'
 import OneOnOneDialog from '../components/OneOnOneDialog.vue'

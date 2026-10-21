@@ -14,6 +14,8 @@ import * as contracts from '../services/contracts.js'
 import * as cost from '../services/cost.js'
 import * as people from '../services/people.js'
 import * as oneOnOne from '../services/oneOnOne.js'
+import * as absences from '../services/absences.js'
+import * as importer from '../services/importer.js'
 import { contractScope, costScope } from '../services/access.js'
 import { VERSION } from '../lib/version.js'
 
@@ -27,7 +29,7 @@ r.get('/me', wrap(async (req) => {
     user: { id: ctx.user.id, name: ctx.user.name, avatar: ctx.user.avatar, depts: ctx.user.depts },
     hr: await isHr(ctx), team: await canSeeTeam(ctx),
     contracts: await contractScope(ctx).then(sc => sc.all || sc.ids.size > 1), cost: await costScope(ctx).then(sc => sc.all || sc.ids.size > 0),
-    oneOnOne: await canSeeTeam(ctx), approver: (await leave.pendingForMe(ctx)).length > 0 || !!ctx.user.leaderOf?.length || await isHr(ctx),
+    oneOnOne: await canSeeTeam(ctx),
     version: VERSION,
     platform: { connected: ws.enabled, url: info?.platformUrl || null },
     brand: info?.brand || null,
@@ -35,34 +37,32 @@ r.get('/me', wrap(async (req) => {
   }
 }))
 
-// 考勤
-r.get('/attendance/month', wrap(req => attendance.monthOf(req.ctx, req.query)))
-r.get('/attendance/team', wrap(req => attendance.teamDay(req.ctx, req.query)))
-r.get('/attendance/report', wrap(req => attendance.monthlyReport(req.ctx, req.query)))
-r.get('/attendance/report.csv', async (req, res) => {
+/** 下载 CSV：出错时回 JSON（前端在新窗口打开，看得到原因） */
+const csvRoute = (fn) => async (req, res) => {
   try {
-    const f = await attendance.monthlyReportCsv(req.ctx, req.query)
+    const f = await fn(req)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(f.filename)}`)
     res.send(f.body)
   } catch (e) {
     res.status(e.status || 500).json({ code: e.status || 500, message: e.status ? e.message : '导出失败' })
   }
-})
+}
+
+// 考勤
+r.get('/attendance/month', wrap(req => attendance.monthOf(req.ctx, req.query)))
+r.get('/attendance/records.csv', csvRoute(req => attendance.monthRecordsCsv(req.ctx, req.query)))
+r.get('/attendance/team', wrap(req => attendance.teamDay(req.ctx, req.query)))
+r.get('/attendance/report', wrap(req => attendance.monthlyReport(req.ctx, req.query)))
+r.get('/attendance/report.csv', csvRoute(req => attendance.monthlyReportCsv(req.ctx, req.query)))
 r.post('/attendance/punches', wrap(req => attendance.addManualPunch(req.ctx, req.body)))
 r.delete('/attendance/punches/:id', wrap(req => attendance.deleteManualPunch(req.ctx, id(req))))
 
-// 请假
+// 假期类型；请假 / 出差 / 外出（钉钉、飞书、企业微信同步来的，只读）
 r.get('/leave/types', wrap(req => leave.listTypes(req.ctx, { all: req.query.all === '1' })))
 r.post('/leave/types', wrap(req => leave.saveType(req.ctx, req.body)))
-r.get('/leave/estimate', wrap(req => leave.estimate(req.ctx, req.query)))
-r.get('/leave/mine', wrap(req => leave.myRequests(req.ctx, req.query)))
-r.get('/leave/pending', wrap(req => leave.pendingForMe(req.ctx)))
-r.get('/leave/team', wrap(req => leave.teamRequests(req.ctx, req.query)))
-r.get('/leave/:id', wrap(req => leave.getRequest(req.ctx, id(req))))
-r.post('/leave', wrap(req => leave.submitLeave(req.ctx, req.body)))
-r.post('/leave/:id/decide', wrap(req => leave.decideLeave(req.ctx, id(req), req.body)))
-r.post('/leave/:id/cancel', wrap(req => leave.cancelLeave(req.ctx, id(req), req.body)))
+r.get('/absences', wrap(req => absences.absencesOf(req.ctx, req.query)))
+r.get('/absences/team', wrap(req => absences.teamAbsences(req.ctx, req.query)))
 
 // 余额
 r.get('/balance/mine', wrap(req => balance.myBalance(req.ctx, req.query)))
@@ -72,10 +72,13 @@ r.post('/balance/grant-annual', wrap(req => balance.grantAnnual(req.ctx, req.bod
 r.post('/balance/adjust', wrap(req => balance.adjust(req.ctx, req.body)))
 r.post('/balance/carry-over', wrap(req => balance.carryOver(req.ctx, req.body)))
 
+// 智能导入（档案、余额）：先识别出预览，确认后写入
+r.post('/import/analyze', wrap(req => importer.analyze(req.ctx, req.body)))
+r.post('/import/apply', wrap(req => importer.apply(req.ctx, req.body)))
+
 // 员工人事字段、人事成员
 r.get('/employees/search', wrap(req => balance.searchEmployees(req.ctx, req.query)))
 r.patch('/employees/:id', wrap(req => balance.updateEmployee(req.ctx, id(req), req.body)))
-r.post('/employees/import-dates', wrap(req => balance.importEmployeeDates(req.ctx, req.body)))
 r.get('/hr-members', wrap(req => balance.listHr(req.ctx)))
 r.post('/hr-members', wrap(req => balance.addHr(req.ctx, req.body)))
 r.delete('/hr-members/:id', wrap(req => balance.removeHr(req.ctx, id(req))))
@@ -84,6 +87,7 @@ r.delete('/hr-members/:id', wrap(req => balance.removeHr(req.ctx, id(req))))
 r.get('/people/overview', wrap(req => people.overview(req.ctx, req.query)))
 r.get('/people/:id', wrap(req => people.portrait(req.ctx, req.params.id)))
 r.patch('/people/:id/profile', wrap(req => people.updateProfile(req.ctx, id(req), req.body)))
+r.post('/people/exemption', wrap(req => people.setExemption(req.ctx, req.body)))
 
 // 合同
 r.get('/contracts', wrap(req => contracts.listContracts(req.ctx, req.query)))

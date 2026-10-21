@@ -9,8 +9,11 @@ export const SCHEMA = [
   { key: 'workweek', label: '每周上班的日子', type: 'weekdays', default: [1, 2, 3, 4, 5], help: '节假日和调休上班在「节假日」里另配' },
   { key: 'syncEnabled', label: '自动同步打卡', type: 'boolean', default: true },
   { key: 'syncIntervalMinutes', label: '同步间隔（分钟）', type: 'number', default: 30, min: 10, max: 1440 },
-  { key: 'syncLookbackDays', label: '每次重拉最近几天', type: 'number', default: 3, min: 1, max: 31, help: '补卡、审批会改动前几天的结果，所以每次都重拉最近几天' },
-  { key: 'notifyApprover', label: '有人请假时通知审批人', type: 'boolean', default: true, help: '经平台的钉钉 / 飞书 / 企业微信发' },
+  { key: 'syncLookbackDays', label: '每次重拉最近几天', type: 'number', default: 3, min: 1, max: 31, help: '补卡、审批、撤销请假会改动前几天的结果，所以每次都重拉最近几天' },
+  { key: 'absenceAheadDays', label: '请假 / 出差往后多拉几天', type: 'number', default: 30, min: 0, max: 90, help: '提前请好的假、排好的出差也能在日历上看到' },
+  { key: 'workStart', label: '上班时间', type: 'time', default: '09:00', help: '按小时请的假、跨天的出差按和上下班时段的重叠折算到每天' },
+  { key: 'workEnd', label: '下班时间', type: 'time', default: '18:00' },
+  { key: 'hoursPerDay', label: '一天按几小时算', type: 'number', default: 8, min: 1, max: 12, help: '按小时请的假折成天' },
   { key: 'annualRounding', label: '年假折算取整', type: 'select', default: 'floor', options: [{ value: 'floor', label: '不足 1 天不给（法定）' }, { value: 'half', label: '精确到半天' }] },
   { key: 'annualExtraDays', label: '公司福利年假（天/年）', type: 'number', default: 0, min: 0, max: 30, help: '在法定年假之外每年多给的天数，按同样方式折算' },
   { key: 'carryOverMaxDays', label: '年假最多结转几天到下一年', type: 'number', default: 0, min: 0, max: 30 },
@@ -38,6 +41,7 @@ function check(f, v) {
       if (!Number.isFinite(n) || n < (f.min ?? -Infinity) || n > (f.max ?? Infinity)) throw badRequest(`${f.label} 要在 ${f.min} ~ ${f.max} 之间`)
       return n
     }
+    case 'time': if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v))) throw badRequest(`${f.label} 写 HH:mm`); return v
     case 'select': if (!f.options.some(o => o.value === v)) throw badRequest(`${f.label} 的取值不对`); return v
     case 'weekdays':
       if (!Array.isArray(v) || !v.every(d => Number.isInteger(d) && d >= 0 && d <= 6)) throw badRequest(`${f.label} 的取值不对`)
@@ -59,12 +63,18 @@ export async function listSettings(ctx) {
 
 export async function updateSettings(ctx, patch = {}) {
   await requireHr(ctx)
-  const changed = {}
+  const current = await getSettings()
+  const next = {}
   for (const [k, v] of Object.entries(patch)) {
     const f = SCHEMA.find(x => x.key === k)
     if (!f) throw badRequest(`没有设置项 ${k}`)
-    const value = check(f, v)
-    if (JSON.stringify(value) === JSON.stringify((await getSettings())[k])) continue
+    next[k] = check(f, v)
+  }
+  const merged = { ...current, ...next }
+  if (merged.workEnd <= merged.workStart) throw badRequest('下班时间要晚于上班时间')
+  const changed = {}
+  for (const [k, value] of Object.entries(next)) {
+    if (JSON.stringify(value) === JSON.stringify(current[k])) continue
     await prisma.setting.upsert({ where: { key: k }, create: { key: k, value, updatedBy: ctx.user.id }, update: { value, updatedBy: ctx.user.id } })
     changed[k] = value
   }

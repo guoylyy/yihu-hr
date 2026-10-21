@@ -34,7 +34,7 @@
     <div class="card table-wrap" v-loading="loading">
       <el-table :data="data.rows" size="small" show-summary :summary-method="sumRow">
         <el-table-column label="员工" min-width="90" fixed>
-          <template #default="{ row }"><router-link :to="`/people/${row.employee.id}`">{{ row.employee.name }}</router-link></template>
+          <template #default="{ row }"><router-link :to="`/people/${row.employee.id}`">{{ row.employee.name }}</router-link><ExemptTag :value="row.employee.exemption === 'FULL' ? 'FULL' : null" /></template>
         </el-table-column>
         <el-table-column label="部门" min-width="130"><template #default="{ row }">{{ row.employee.deptPath }}</template></el-table-column>
         <el-table-column v-for="c in columns" :key="c" :label="COST_CATEGORIES[c]" min-width="96" align="right">
@@ -119,6 +119,7 @@ import { api } from '../api.js'
 import { COST_CATEGORIES, thisMonth, wan, yuan } from '../labels.js'
 import Bars from '../components/Bars.vue'
 import MonthBars from '../components/MonthBars.vue'
+import ExemptTag from '../components/ExemptTag.vue'
 
 const month = ref(thisMonth())
 const keyword = ref('')

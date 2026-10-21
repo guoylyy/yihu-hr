@@ -1,6 +1,8 @@
 // 企业微信打卡：POST /cgi-bin/checkin/getcheckindata（一次最多 100 人、30 天）
 // 要用「打卡」系统应用的 Secret 取 token（和平台登录用的自建应用不是一个）
+// 请假、出差、外出：POST /cgi-bin/checkin/getcheckin_daydata 的假勤统计（按天给，一次最多 100 人、30 天）
 // 文档：https://developer.work.weixin.qq.com/document/path/90262
+//       https://developer.work.weixin.qq.com/document/path/96498
 import { callJson, tokenCache } from './http.js'
 import { dayInTz, zonedTime, addDays } from '../lib/dates.js'
 
@@ -42,6 +44,31 @@ export function normalize(r, tz) {
   }
 }
 
+// 假勤类型：1 请假、3 出差、4 外出（2 补卡、15 审批打卡、100 外勤不算）
+const SP_TYPE = { 1: 'LEAVE', 3: 'TRIP', 4: 'OUT' }
+
+/** 企业微信一个人一天的日报 → 这天的假勤记录（时长：time_type 0 按天、1 按小时，duration 是秒） */
+export function normalizeDay(d, tz) {
+  const info = d.base_info || {}
+  if (!info.date) return []
+  const date = dayInTz(new Date(info.date * 1000), tz)
+  return (d.sp_items || [])
+    .filter(x => SP_TYPE[x.type] && (Number(x.count) > 0 || Number(x.duration) > 0))
+    .map(x => ({
+      source: 'WECOM',
+      externalId: `${info.acctid}:${date}:${x.type}:${x.vacation_id || 0}`,
+      vendorUserId: info.acctid,
+      category: SP_TYPE[x.type],
+      typeName: x.name || (x.type === 3 ? '出差' : x.type === 4 ? '外出' : null),
+      startAt: null, endAt: null,
+      startDate: date, endDate: date,
+      days: Number(x.time_type) === 0 && Number(x.duration) > 0 ? Math.round(Number(x.duration) / 864) / 100 : null,
+      hours: Number(x.time_type) === 1 && Number(x.duration) > 0 ? Math.round(Number(x.duration) / 36) / 100 : null,
+      approvalId: null,
+      raw: x
+    }))
+}
+
 export default {
   source: 'WECOM',
   label: '企业微信',
@@ -61,6 +88,18 @@ export default {
     if (j.errcode === 40014 || j.errcode === 42001) token.reset()
     if (j.errcode !== 0) throw new Error(`企业微信打卡接口出错（${j.errcode}）：${j.errmsg}`)
     return (j.checkindata || []).map(r => normalize(r, tz))
+  },
+  absenceBatchUsers: 100,
+  absenceMaxDays: 30,
+  async fetchAbsences(ids, from, to, tz) {
+    const start = Math.floor(zonedTime(from, '00:00', tz).getTime() / 1000)
+    const end = Math.floor(zonedTime(to, '00:00', tz).getTime() / 1000)
+    const j = await callJson('企业微信', `${API}/checkin/getcheckin_daydata?access_token=${await token()}`, {
+      method: 'POST', body: { starttime: start, endtime: end, useridlist: ids }
+    })
+    if (j.errcode === 40014 || j.errcode === 42001) token.reset()
+    if (j.errcode !== 0) throw new Error(`企业微信打卡日报接口出错（${j.errcode}）：${j.errmsg}`)
+    return (j.datas || []).flatMap(d => normalizeDay(d, tz))
   },
   _token: token
 }

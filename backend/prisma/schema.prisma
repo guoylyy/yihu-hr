@@ -1,5 +1,6 @@
 // 人事考勤的数据模型。人以以虎 One 为准：Employee 是平台用户主数据的本地副本（id = 平台 user.id），
-// 只多存平台没有的人事字段（入职日期、参加工作日期、审批人）。
+// 只多存平台没有的人事字段（入职日期、参加工作日期、档案）。
+// 打卡、请假、出差、外出都以钉钉 / 飞书 / 企业微信为准，同步过来只读；本应用不再走请假审批（LeaveRequest 只留着旧数据）。
 // 表结构改动要向前兼容（先加字段、后删字段）：平台回滚只回代码不回数据库。
 
 generator client {
@@ -37,7 +38,7 @@ model Employee {
   /// 人事字段：入职本单位日期、参加工作日期（算法定年假用）
   hireDate      DateTime? @db.Date
   workStartDate DateTime? @db.Date
-  /// 指定审批人（不设则找部门负责人，再找人事）
+  /// 旧版的指定审批人（0.3.0 起请假审批在钉钉 / 飞书 / 企业微信里走，不再用）
   approverId    Int?
   /// 档案（人事填，画像用）：用工类型 FULL_TIME 全职 / INTERN 实习 / PART_TIME 兼职 / OUTSOURCED 外包 / REHIRED 退休返聘
   employmentType String?  @db.VarChar(12)
@@ -55,6 +56,11 @@ model Employee {
   major         String?   @db.VarChar(100)
   /// 标签（技能、特长、关注点），字符串数组
   tags          Json?
+  /// 考勤 / 考核豁免：空 = 正常；ATTENDANCE 免考勤（不进考勤统计，人员指标、成本照算）；
+  /// FULL 免考勤、不参与考核（如董事：考勤统计、人员全景的指标和人员成本都不算）。名单、档案、成本表里照常有
+  exemption     String?   @db.VarChar(10)
+  /// 豁免原因（如「董事会成员」「外派」）
+  exemptNote    String?   @db.VarChar(100)
   syncedAt      DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -118,6 +124,8 @@ model SyncRun {
   saved      Int       @default(0)
   /// 有平台账号但对不上这家身份的人数
   unmatched  Int       @default(0)
+  /// 同步到的请假 / 出差 / 外出条数
+  absences   Int       @default(0)
   error      String?   @db.Text
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -141,7 +149,7 @@ model LeaveType {
   updatedAt DateTime @updatedAt
 }
 
-/// 请假申请
+/// 旧版（0.2.x）在本应用里提交的请假申请。0.3.0 起不再新增，已批准的照常算进考勤
 model LeaveRequest {
   id           Int       @id @default(autoincrement())
   userId       Int
@@ -179,15 +187,54 @@ model LeaveLedger {
   typeCode  String   @db.VarChar(20)
   /// 正数增加，负数扣减（天）
   delta     Decimal  @db.Decimal(6, 1)
-  /// GRANT 发放 / CARRY_OVER 上年结转 / ADJUST 调整 / USE 请假扣减 / RESTORE 撤销退回 / EXPIRE 清零
+  /// GRANT 发放 / CARRY_OVER 上年结转 / ADJUST 调整 / IMPORT 导入（设为某个余额）/ USE 请假扣减 / RESTORE 撤销退回 / EXPIRE 清零
   kind      String   @db.VarChar(12)
+  /// 旧版请假申请
   requestId Int?
+  /// 同步来的请假（Absence）：扣减和退回按它对账
+  absenceId Int?
   note      String?  @db.VarChar(300)
   createdBy Int?
   createdAt DateTime @default(now())
 
   @@index([userId, year, typeCode])
   @@index([requestId])
+  @@index([absenceId])
+}
+
+/// 请假 / 出差 / 外出：从钉钉、飞书、企业微信同步来的已通过的假勤，只读。(source, externalId) 唯一，重复同步只会更新；
+/// 重拉时各家已经没有了的（撤销了）标成 CANCELLED。对上「扣余额」的假期类型时自动扣 / 退余额
+model Absence {
+  id         Int       @id @default(autoincrement())
+  /// DINGTALK / FEISHU / WECOM
+  source     String    @db.VarChar(10)
+  externalId String    @db.VarChar(128)
+  userId     Int
+  /// LEAVE 请假 / TRIP 出差 / OUT 外出
+  category   String    @db.VarChar(8)
+  /// 各家的名称（年假、事假、外出……）；钉钉的请假拿不到类型时为空
+  typeName   String?   @db.VarChar(50)
+  /// 按名称对上的本应用假期类型
+  typeCode   String?   @db.VarChar(20)
+  /// 起止时刻（企业微信按天给，没有）
+  startAt    DateTime?
+  endAt      DateTime?
+  /// 考勤日 YYYY-MM-DD
+  startDate  String    @db.VarChar(10)
+  endDate    String    @db.VarChar(10)
+  /// 各家报的时长（有哪个填哪个）
+  days       Decimal?  @db.Decimal(6, 2)
+  hours      Decimal?  @db.Decimal(7, 2)
+  /// APPROVED 已通过 / CANCELLED 各家已经没有了（撤销）
+  status     String    @default("APPROVED") @db.VarChar(10)
+  approvalId String?   @db.VarChar(64)
+  raw        Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([source, externalId])
+  @@index([userId, startDate])
+  @@index([startDate, endDate])
 }
 
 /// 节假日与调休上班日：HOLIDAY 放假（工作日也不上班）/ WORKDAY 调休上班（周末也上班）

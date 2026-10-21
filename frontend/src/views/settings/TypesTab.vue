@@ -14,7 +14,7 @@
         <el-table-column label="" width="60" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button></template></el-table-column>
       </el-table>
     </div>
-    <p class="help">年假（ANNUAL）由「假期余额 → 发放年假」按工龄发；其他要扣余额的假（如调休）由人事手工调整余额。</p>
+    <p class="help">钉钉 / 飞书 / 企业微信同步来的请假按<b>名称</b>对上这里的类型（年休假 = 年假、调休假 = 调休），对上「扣余额」的类型就自动扣余额、撤销了退回；对不上的照样算进考勤，只是不扣余额。年假（ANNUAL）由「假期余额 → 发放年假」按工龄发；余额也可以在「智能导入」里按表导入。</p>
 
     <el-dialog v-model="edit.open" :title="edit.isNew ? '新增假期类型' : `编辑 · ${edit.form.name}`" width="min(460px, 94vw)">
       <el-form label-width="80px" @submit.prevent>

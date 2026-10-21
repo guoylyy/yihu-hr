@@ -1,6 +1,8 @@
-// 打卡同步：定时把三家的打卡结果拉过来，按 (来源, 外部 id) 去重存进 Punch
+// 打卡同步：定时把三家的打卡结果拉过来，按 (来源, 外部 id) 去重存进 Punch；
+// 再把已通过的请假 / 出差 / 外出拉过来存进 Absence（往后多拉 absenceAheadDays 天，提前请的假也看得到）
 //   - 人对人：平台用户主数据里的 dingUserId / feishuOpenId / wecomUserId（对不上的人数记在同步记录里）
-//   - 每次重拉最近 syncLookbackDays 天（补卡、改结果会改动前几天）；首次同步拉 31 天
+//   - 每次重拉最近 syncLookbackDays 天（补卡、改结果、撤销请假会改动前几天）；首次同步拉 31 天
+//   - 假勤拉失败不影响打卡：同步记录照样算成功，出错信息写在说明里
 //   - 同一来源同时只跑一个；一家出错不影响别家
 import { prisma } from '../lib/prisma.js'
 import { badRequest } from '../lib/http.js'
@@ -10,6 +12,7 @@ import { getSettings } from './settings.js'
 import { requireHr } from './access.js'
 import { audit } from './audit.js'
 import { syncDirectory } from './directory.js'
+import { cancelMissing, saveAbsences } from './absences.js'
 import { platformError, refreshPlatformChannels } from '../providers/platformToken.js'
 const PLATFORM_KEY = { DINGTALK: 'dingtalk', FEISHU: 'feishu' }
 
@@ -44,6 +47,23 @@ async function savePunches(list) {
       update: { workDate: data.workDate, kind: data.kind, checkTime: data.checkTime, planTime: data.planTime, result: data.result, location: data.location, note: data.note, raw: data.raw, userId: data.userId }
     })
     saved++
+  }
+  return saved
+}
+
+/** 一家的请假 / 出差 / 外出：按批拉完一批人就对一次账（这段时间里各家已经没有的标撤销） */
+async function syncAbsences(p, idMap, from, to, tz) {
+  let saved = 0
+  for (const ids of chunk([...idMap.keys()], p.absenceBatchUsers || p.batchUsers)) {
+    const seen = []
+    for (const [a, b] of chunkDays(from, to, p.absenceMaxDays || p.maxDays)) {
+      const list = (await p.fetchAbsences(ids, a, b, tz))
+        .map(x => ({ ...x, userId: idMap.get(x.vendorUserId) }))
+        .filter(x => x.userId)
+      saved += await saveAbsences(list)
+      seen.push(...list.map(x => x.externalId))
+    }
+    await cancelMissing(p.source, ids.map(id => idMap.get(id)), from, to, [...new Set(seen)])
   }
   return saved
 }
@@ -92,8 +112,17 @@ async function runSource(p, { from, to, trigger }) {
         saved += await savePunches(list)
       }
     }
-    await prisma.syncRun.update({ where: { id: run.id }, data: { ok: true, fetched, saved, unmatched, finishedAt: new Date() } })
-    return { source, from, to, fetched, saved, unmatched }
+    let absences = 0, absenceError = null
+    if (p.fetchAbsences) {
+      try {
+        absences = await syncAbsences(p, idMap, from, addDays(to, s.absenceAheadDays), s.timezone)
+      } catch (e) {
+        absenceError = `请假 / 出差 / 外出没有同步：${e.message}`
+        console.warn(`[hr] ${p.label}${absenceError}`)
+      }
+    }
+    await prisma.syncRun.update({ where: { id: run.id }, data: { ok: true, fetched, saved, unmatched, absences, error: absenceError, finishedAt: new Date() } })
+    return { source, from, to, fetched, saved, unmatched, absences, ...(absenceError ? { warning: absenceError } : {}) }
   } catch (e) {
     await prisma.syncRun.update({ where: { id: run.id }, data: { ok: false, error: String(e.message).slice(0, 2000), finishedAt: new Date() } })
     throw e

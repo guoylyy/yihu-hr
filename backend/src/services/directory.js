@@ -65,5 +65,6 @@ export async function touchEmployee(user) {
 }
 
 export function employeeBrief(e) {
-  return e ? { id: e.id, name: e.name, jobNumber: e.jobNumber, deptPath: e.deptPath, avatar: e.avatar, active: e.active } : null
+  // exemption：考勤 / 考核豁免（lib/exemption.js），前端在名单里标出来
+  return e ? { id: e.id, name: e.name, jobNumber: e.jobNumber, deptPath: e.deptPath, avatar: e.avatar, active: e.active, exemption: e.exemption || null } : null
 }

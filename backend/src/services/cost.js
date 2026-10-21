@@ -157,12 +157,16 @@ export async function personCost(ctx, userId) {
   }
 }
 
-/** 汇总：按部门、按月、按类别（人员全景用）。year 默认今年 */
-export async function costSummary(ctx, { year } = {}) {
+/**
+ * 汇总：按部门、按月、按类别（人员全景用）。year 默认今年。
+ * excludeExempt：不算不参与考核的人（人员全景、老板简报用；成本表照常全算）
+ */
+export async function costSummary(ctx, { year, excludeExempt = false } = {}) {
   const scope = await costScope(ctx)
   if (!scope.all && !scope.ids.size) return null
   const y = String(year || (await today()).slice(0, 4))
-  const items = await prisma.costItem.findMany({ where: { month: { startsWith: y }, ...(scope.all ? {} : { userId: { in: [...scope.ids] } }) } })
+  const skip = excludeExempt ? (await prisma.employee.findMany({ where: { exemption: 'FULL' }, select: { id: true } })).map(e => e.id) : []
+  const items = (await prisma.costItem.findMany({ where: { month: { startsWith: y }, ...(scope.all ? {} : { userId: { in: [...scope.ids] } }) } })).filter(i => !skip.includes(i.userId))
   const emps = new Map((await prisma.employee.findMany({ where: { id: { in: [...new Set(items.map(i => i.userId))] } } })).map(e => [e.id, e]))
   const s = summarize(items)
   const byDept = {}

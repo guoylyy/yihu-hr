@@ -7,7 +7,7 @@
           <span v-else>{{ pf.name?.slice(-2) }}</span>
         </div>
         <div class="who">
-          <h2>{{ pf.name }}<el-tag v-if="!pf.active || pf.leaveDate" size="small" type="info" style="margin-left: 8px">已离职 {{ pf.leaveDate || '' }}</el-tag></h2>
+          <h2>{{ pf.name }}<el-tag v-if="!pf.active || pf.leaveDate" size="small" type="info" style="margin-left: 8px">已离职 {{ pf.leaveDate || '' }}</el-tag><ExemptTag :value="pf.exemption" :note="pf.exemptNote" /></h2>
           <div class="muted">{{ [pf.deptPath, pf.title, pf.level].filter(Boolean).join(' · ') }}</div>
           <div class="facts">
             <span v-if="pf.jobNumber">工号 {{ pf.jobNumber }}</span>
@@ -17,7 +17,6 @@
             <span v-if="pf.workYears != null">工龄 {{ pf.workYears }} 年</span>
             <span v-if="pf.age != null">{{ pf.gender === 'M' ? '男 · ' : pf.gender === 'F' ? '女 · ' : '' }}{{ pf.age }} 岁</span>
             <span v-if="pf.education">{{ pf.education }}{{ pf.school ? ` · ${pf.school}` : '' }}{{ pf.major ? ` · ${pf.major}` : '' }}</span>
-            <span v-if="p.approver">请假审批人 {{ p.approver.name }}</span>
           </div>
           <div v-if="pf.tags.length" style="margin-top: 6px"><el-tag v-for="t in pf.tags" :key="t" size="small" effect="plain" style="margin-right: 4px">{{ t }}</el-tag></div>
         </div>
@@ -73,7 +72,8 @@
         <div class="card">
           <h3>考勤与假期</h3>
           <div class="facts col">
-            <span>近 30 天考勤异常：<b :class="{ bad: p.attendance.abnormalDays30 >= 3 }">{{ p.attendance.abnormalDays30 }}</b> 天 <router-link v-if="isSelf" to="/my" class="small">看明细</router-link></span>
+            <span v-if="pf.exemption" class="muted small">{{ pf.exemption === 'FULL' ? '免考勤、不参与考核' : '免考勤' }}：考勤不算进团队统计</span>
+            <span>近 30 天考勤异常：<b :class="{ bad: p.attendance.abnormalDays30 >= 3 }">{{ p.attendance.abnormalDays30 }}</b> 天 <router-link :to="isSelf ? '/my' : { path: '/my', query: { userId: pf.id } }" class="small">考勤日历</router-link></span>
             <span>今年已休：<template v-if="Object.keys(p.leave.usedThisYear).length"><span v-for="(d, k) in p.leave.usedThisYear" :key="k" style="margin-right: 10px">{{ k }} {{ d }} 天</span></template><span v-else class="muted">没有</span></span>
             <span>可用余额：<span v-for="(d, k) in p.leave.balances" :key="k" style="margin-right: 10px">{{ k }} {{ d }} 天</span></span>
           </div>
@@ -109,6 +109,13 @@
         <el-form-item label="学历"><el-select v-model="prof.form.education" clearable style="width: 100%"><el-option v-for="e in EDUCATION" :key="e" :value="e" :label="e" /></el-select></el-form-item>
         <el-form-item label="院校"><el-input v-model="prof.form.school" maxlength="100" /></el-form-item>
         <el-form-item label="专业"><el-input v-model="prof.form.major" maxlength="100" /></el-form-item>
+        <el-form-item label="考勤 / 考核">
+          <el-radio-group v-model="prof.form.exemption">
+            <el-radio value="">正常</el-radio><el-radio value="ATTENDANCE">免考勤</el-radio><el-radio value="FULL">免考勤、不参与考核</el-radio>
+          </el-radio-group>
+          <div v-if="prof.form.exemption" class="help">{{ EXEMPTION_HELP[prof.form.exemption] }}</div>
+        </el-form-item>
+        <el-form-item v-if="prof.form.exemption" label="原因"><el-input v-model="prof.form.exemptNote" maxlength="100" placeholder="如：董事会成员、长期外派" /></el-form-item>
         <el-form-item label="标签"><el-select v-model="prof.form.tags" multiple filterable allow-create default-first-option placeholder="技能、特长，回车添加" style="width: 100%" /></el-form-item>
       </el-form>
       <template #footer>
@@ -143,7 +150,8 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '../api.js'
 import { me } from '../me.js'
-import { CONTRACT_STATUS, COST_CATEGORIES, EDUCATION, EMPLOYMENT, FLAG_LEVEL, MOODS, wan, yuan } from '../labels.js'
+import { CONTRACT_STATUS, COST_CATEGORIES, EDUCATION, EMPLOYMENT, EXEMPTION_HELP, FLAG_LEVEL, MOODS, wan, yuan } from '../labels.js'
+import ExemptTag from '../components/ExemptTag.vue'
 import Bars from '../components/Bars.vue'
 import MonthBars from '../components/MonthBars.vue'
 import ContractDialog from '../components/ContractDialog.vue'
@@ -167,7 +175,7 @@ watch(() => route.params.id, (id) => { if (id) { p.value = null; load() } }, { i
 const prof = reactive({ open: false, saving: false, form: {} })
 function openProfile() {
   const f = pf.value
-  prof.form = { employmentType: f.employmentType || '', level: f.level || '', hireDate: f.hireDate, regularDate: f.regularDate, workStartDate: f.workStartDate, leaveDate: f.leaveDate, gender: f.gender || '', birthDate: f.birthDate, education: f.education || '', school: f.school || '', major: f.major || '', tags: [...f.tags] }
+  prof.form = { employmentType: f.employmentType || '', level: f.level || '', hireDate: f.hireDate, regularDate: f.regularDate, workStartDate: f.workStartDate, leaveDate: f.leaveDate, gender: f.gender || '', birthDate: f.birthDate, education: f.education || '', school: f.school || '', major: f.major || '', tags: [...f.tags], exemption: f.exemption || '', exemptNote: f.exemptNote || '' }
   prof.open = true
 }
 async function saveProfile() {
@@ -175,6 +183,7 @@ async function saveProfile() {
   try {
     const body = { ...prof.form }
     for (const k of ['hireDate', 'regularDate', 'workStartDate', 'leaveDate', 'birthDate']) body[k] = body[k] || null
+    body.exemption = body.exemption || 'NONE'
     await api.patch(`people/${pf.value.id}/profile`, body)
     ElMessage.success('已保存')
     prof.open = false

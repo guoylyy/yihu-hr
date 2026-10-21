@@ -1,8 +1,8 @@
 import test, { afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import dingtalk, { normalize as ding } from '../src/providers/dingtalk.js'
-import feishu, { normalize as fs } from '../src/providers/feishu.js'
-import wecom, { normalize as wc } from '../src/providers/wecom.js'
+import dingtalk, { normalize as ding, normalizeLeave as dingLeave } from '../src/providers/dingtalk.js'
+import feishu, { normalize as fs, normalizeApprovals as fsApprovals } from '../src/providers/feishu.js'
+import wecom, { normalize as wc, normalizeDay as wcDay } from '../src/providers/wecom.js'
 
 const TZ = 'Asia/Shanghai'
 const realFetch = globalThis.fetch
@@ -145,4 +145,78 @@ test('钉钉：本应用没配凭证时用以虎 One 登录方式里那个应用
     delete ws.enabled
     if (enabled) Object.defineProperty(Object.getPrototypeOf(ws), 'enabled', enabled)
   }
+})
+
+// ---------- 请假 / 出差 / 外出 ----------
+
+test('钉钉请假：按天 / 按小时的时长，结束在 0 点的算到前一天', () => {
+  const day = dingLeave({ userid: 'u1', start_time: Date.parse('2026-10-15T00:00:00+08:00'), end_time: Date.parse('2026-10-17T00:00:00+08:00'), duration_unit: 'percent_day', duration_percent: 200 }, TZ)
+  assert.equal(day.category, 'LEAVE')
+  assert.equal(day.startDate, '2026-10-15')
+  assert.equal(day.endDate, '2026-10-16')
+  assert.equal(day.days, 2)
+  assert.equal(day.hours, null)
+  const hour = dingLeave({ userid: 'u1', start_time: Date.parse('2026-10-15T14:00:00+08:00'), end_time: Date.parse('2026-10-15T16:00:00+08:00'), duration_unit: 'percent_hour', duration_percent: 200 }, TZ)
+  assert.equal(hour.hours, 2)
+  assert.equal(hour.externalId, `u1:${Date.parse('2026-10-15T14:00:00+08:00')}:${Date.parse('2026-10-15T16:00:00+08:00')}`)
+})
+
+test('钉钉请假：一次 100 人、分页 20 条，时间按时区换成毫秒', async () => {
+  process.env.DINGTALK_APP_KEY = 'k'; process.env.DINGTALK_APP_SECRET = 's'
+  dingtalk._token.reset()
+  const leave = (n) => ({ userid: 'u1', start_time: n, end_time: n + 3600_000, duration_unit: 'percent_hour', duration_percent: 100 })
+  const calls = stub({
+    '/gettoken': { errcode: 0, access_token: 'T', expires_in: 7200 },
+    '/getleavestatus': (c) => (c.body.offset === 0 ? { errcode: 0, result: { has_more: true, leave_status: [leave(1)] } } : { errcode: 0, result: { has_more: false, leave_status: [leave(2)] } })
+  })
+  const out = await dingtalk.fetchAbsences(['u1', 'u2'], '2026-10-15', '2026-10-16', TZ)
+  assert.equal(out.length, 2)
+  const q = calls.filter(c => c.url.includes('/getleavestatus'))
+  assert.equal(q[0].body.userid_list, 'u1,u2')
+  assert.equal(q[0].body.size, 20)
+  assert.equal(q[0].body.start_time, Date.parse('2026-10-15T00:00:00+08:00'))
+  assert.equal(q[0].body.end_time, Date.parse('2026-10-17T00:00:00+08:00') - 1)
+  assert.equal(q[1].body.offset, 20)
+})
+
+test('飞书审批：请假、出差、外出，按审批去重；按小时的带时长；不存事由', async () => {
+  const ua = {
+    user_id: 'fu1', date: 20261015,
+    leaves: [{ uniq_id: 'L1', approval_id: 'A1', unit: 1, interval: 28800, start_time: '2026-10-15 09:00:00', end_time: '2026-10-16 18:00:00', i18n_names: { ch: '年假' }, reason: '回老家' }],
+    trips: [{ approval_id: 'T1', start_time: '2026-10-19 09:00:00', end_time: '2026-10-20 18:00:00' }],
+    outs: [{ uniq_id: 'O1', approval_id: 'A3', unit: 2, interval: 7200, start_time: '2026-10-21 14:00:00', end_time: '2026-10-21 16:00:00', i18n_names: { ch: '外出' } }]
+  }
+  const list = fsApprovals(ua, TZ)
+  assert.deepEqual(list.map(x => [x.category, x.typeName, x.startDate, x.endDate, x.hours]), [['LEAVE', '年假', '2026-10-15', '2026-10-16', null], ['TRIP', '出差', '2026-10-19', '2026-10-20', null], ['OUT', '外出', '2026-10-21', '2026-10-21', 2]])
+  assert.equal(list[0].startAt.toISOString(), '2026-10-15T01:00:00.000Z')
+  assert.equal(list[0].raw.reason, undefined)
+
+  process.env.FEISHU_APP_ID = 'a'; process.env.FEISHU_APP_SECRET = 'b'
+  feishu._token.reset()
+  const calls = stub({
+    '/tenant_access_token': { code: 0, tenant_access_token: 'T', expire: 7200 },
+    // 跨两天的假两天各给一次
+    '/user_approvals/query': { code: 0, data: { user_approvals: [ua, { ...ua, date: 20261016, trips: [], outs: [] }] } }
+  })
+  const out = await feishu.fetchAbsences(['fu1'], '2026-10-15', '2026-10-21', TZ)
+  assert.equal(out.length, 3)
+  const q = calls.find(c => c.url.includes('/user_approvals/query'))
+  assert.deepEqual(q.body, { user_ids: ['fu1'], check_date_from: 20261015, check_date_to: 20261021, status: 2 })
+  assert.ok(q.url.includes('employee_type=employee_id'))
+})
+
+test('企业微信日报：只要请假、出差、外出，时长按天 / 按小时', () => {
+  const d = {
+    base_info: { date: Date.parse('2026-10-15T00:00:00+08:00') / 1000, acctid: 'w1' },
+    sp_items: [
+      { type: 1, vacation_id: 7, count: 1, duration: 43200, time_type: 0, name: '年假' },
+      { type: 1, vacation_id: 8, count: 1, duration: 7200, time_type: 1, name: '事假' },
+      { type: 2, count: 1, duration: 0, time_type: 0, name: '补卡次数' },
+      { type: 3, count: 1, duration: 86400, time_type: 0, name: '出差' },
+      { type: 4, count: 0, duration: 0, time_type: 1, name: '外出' }
+    ]
+  }
+  const list = wcDay(d, TZ)
+  assert.deepEqual(list.map(x => [x.category, x.typeName, x.startDate, x.days, x.hours]), [['LEAVE', '年假', '2026-10-15', 0.5, null], ['LEAVE', '事假', '2026-10-15', null, 2], ['TRIP', '出差', '2026-10-15', 1, null]])
+  assert.equal(list[0].externalId, 'w1:2026-10-15:1:7')
 })

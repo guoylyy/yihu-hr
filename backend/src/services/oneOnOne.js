@@ -82,7 +82,8 @@ export async function roster(ctx, { keyword } = {}) {
     const since = s?.last ? diffDays(s.last.date, day) : null
     return {
       employee: employeeBrief(e), count: s?.count || 0, last: s?.last || null, sinceDays: since, openActions: s?.openActions || 0,
-      overdue: cadence > 0 && (since == null || since > cadence), nextDue: s?.last?.nextDate && s.last.nextDate <= day
+      // 不参与考核的人（如董事）不催 1v1
+      overdue: e.exemption !== 'FULL' && cadence > 0 && (since == null || since > cadence), nextDue: s?.last?.nextDate && s.last.nextDate <= day
     }
   })
   rows.sort((a, b) => (b.overdue - a.overdue) || ((b.sinceDays ?? 1e9) - (a.sinceDays ?? 1e9)))

@@ -41,15 +41,14 @@ const items = computed(() => [
   ...(me.team ? [{ to: '/people', label: '人员全景' }] : []),
   { group: '考勤' },
   { to: '/my', label: '我的考勤' },
-  { to: '/leave', label: '请假' },
-  ...(me.approver || me.hr ? [{ to: '/approvals', label: '审批' }] : []),
-  ...(me.team ? [{ to: '/team', label: '团队考勤' }, { to: '/report', label: '月度报表' }] : []),
+  { to: '/leave', label: '我的假期' },
+  ...(me.team ? [{ to: '/team', label: '团队考勤' }] : []),
   { group: '人员' },
   { to: '/people/me', label: '我的档案' },
   { to: '/one-on-ones', label: '1v1' },
   ...(me.contracts ? [{ to: '/contracts', label: '合同' }] : []),
   ...(me.cost ? [{ to: '/costs', label: '人员成本' }] : []),
-  ...(me.hr ? [{ group: '管理' }, { to: '/balances', label: '假期余额' }, { to: '/settings', label: '设置' }] : [])
+  ...(me.hr ? [{ group: '管理' }, { to: '/import', label: '智能导入' }, { to: '/balances', label: '假期余额' }, { to: '/settings', label: '设置' }] : [])
 ])
 </script>
 

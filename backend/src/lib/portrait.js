@@ -1,6 +1,7 @@
 // 员工画像的纯逻辑：司龄、年龄、分布，以及要人事 / 负责人留意的事（标记）
 import { diffDays } from './dates.js'
 import { KINDS, contractStatus, daysLeft, restrictWindow } from './contracts.js'
+import { FULL_SKIP_FLAGS, attendanceExempt, evaluationExempt } from './exemption.js'
 
 const ymd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d || null)
 
@@ -29,6 +30,7 @@ export const LEVELS = { risk: 3, warn: 2, info: 1 }
 /**
  * 要留意的事。contracts 是这个人没删的合同；last1v1 是最近一次 1v1；abnormalDays 是近 30 天考勤异常天数
  * settings: { contractWarnDays, oneOnOneCadenceDays }
+ * 免考勤的人不报考勤异常；不参与考核的人不报考核类的提醒（见 lib/exemption.js）
  */
 export function flagsFor({ employee, contracts = [], last1v1 = null, openActions = 0, abnormalDays = 0, today, settings, isLeader = false }) {
   const flags = []
@@ -60,7 +62,8 @@ export function flagsFor({ employee, contracts = [], last1v1 = null, openActions
   for (const c of contracts.filter(c => c.kind === 'NON_COMPETE' && st(c) === 'IN_FORCE')) {
     flags.push({ code: 'NC_IN_FORCE', level: 'info', text: `竞业限制履行中，到 ${restrictWindow(c, leaveDate).to}，要按月付补偿` })
   }
-  return flags.sort((a, b) => LEVELS[b.level] - LEVELS[a.level])
+  const skip = evaluationExempt(employee) ? FULL_SKIP_FLAGS : attendanceExempt(employee) ? ['ATTENDANCE'] : []
+  return flags.filter(f => !skip.includes(f.code)).sort((a, b) => LEVELS[b.level] - LEVELS[a.level])
 }
 
 export const kindLabel = (k) => KINDS[k] || k

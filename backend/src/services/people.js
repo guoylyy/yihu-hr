@@ -12,7 +12,9 @@ import { contractDto, contractsOf, today } from './contracts.js'
 import { costSummary, personCost } from './cost.js'
 import { stats as oneOnOneStats } from './oneOnOne.js'
 import { balanceOf } from './leave.js'
+import { leaveUsedByType } from './absences.js'
 import { getSettings } from './settings.js'
+import { EXEMPTIONS, attendanceExempt } from '../lib/exemption.js'
 
 export const EMPLOYMENT = { FULL_TIME: '全职', INTERN: '实习', PART_TIME: '兼职', OUTSOURCED: '外包', REHIRED: '退休返聘' }
 export const EDUCATION = ['高中及以下', '大专', '本科', '硕士', '博士']
@@ -27,8 +29,27 @@ function profileDto(e, day, hr) {
     employmentType: e.employmentType, employmentLabel: EMPLOYMENT[e.employmentType] || null, level: e.level,
     gender: e.gender, birthDate: hr ? ymd(e.birthDate) : undefined, age: e.birthDate ? yearsBetween(e.birthDate, day) : null,
     education: e.education, school: e.school, major: e.major, tags: Array.isArray(e.tags) ? e.tags : [],
-    tenure: tenure(e.hireDate, day), workYears: e.workStartDate ? yearsBetween(e.workStartDate, day) : null
+    tenure: tenure(e.hireDate, day), workYears: e.workStartDate ? yearsBetween(e.workStartDate, day) : null,
+    exemption: e.exemption || null, exemptionLabel: EXEMPTIONS[e.exemption] || null, exemptNote: e.exemptNote || null
   }
+}
+
+/** 豁免的取值校验：空 / NONE = 正常 */
+function checkExemption(v) {
+  if (!v || v === 'NONE') return null
+  if (!EXEMPTIONS[v]) throw badRequest('豁免只能是 ATTENDANCE（免考勤）或 FULL（免考勤、不参与考核）')
+  return v
+}
+
+/** 人事批量设考勤 / 考核豁免（人员全景里勾选几个人设） */
+export async function setExemption(ctx, { userIds = [], exemption, note } = {}) {
+  await requireHr(ctx)
+  const ids = [...new Set((userIds || []).map(Number).filter(Boolean))]
+  if (!ids.length) throw badRequest('选几个人')
+  const value = checkExemption(exemption)
+  const r = await prisma.employee.updateMany({ where: { id: { in: ids } }, data: { exemption: value, exemptNote: value ? (note ? String(note).trim().slice(0, 100) : null) : null } })
+  audit(ctx, 'employee.exemption', { entityType: 'employee', detail: { count: r.count, exemption: value || 'NONE' } })
+  return { updated: r.count }
 }
 
 /** 人事改档案 */
@@ -54,6 +75,11 @@ export async function updateProfile(ctx, id, body = {}) {
     if (body.education && !EDUCATION.includes(body.education)) throw badRequest('学历不对')
     data.education = body.education || null
   }
+  if (body.exemption !== undefined) {
+    data.exemption = checkExemption(body.exemption)
+    if (!data.exemption) data.exemptNote = null
+  }
+  if (body.exemptNote !== undefined && data.exemption !== null) data.exemptNote = body.exemptNote ? String(body.exemptNote).trim().slice(0, 100) : null
   for (const [k, n] of [['level', 20], ['school', 100], ['major', 100]]) if (body[k] !== undefined) data[k] = body[k] ? String(body[k]).trim().slice(0, n) : null
   if (body.tags !== undefined) data.tags = Array.isArray(body.tags) ? [...new Set(body.tags.map(t => String(t).trim().slice(0, 20)).filter(Boolean))].slice(0, 20) : []
   const u = await prisma.employee.update({ where: { id: emp.id }, data })
@@ -83,24 +109,21 @@ export async function portrait(ctx, id) {
   const hr = await isHr(ctx)
   const self = uid === ctx.user.id
   const seeContracts = inScope(await contractScope(ctx), uid)
-  const [contracts, st, abn, cost, leaveRows, bal] = await Promise.all([
+  const [contracts, st, abn, cost, leaveByType, bal] = await Promise.all([
     contractsOf([uid]).then(m => m.get(uid) || []),
     oneOnOneStats([uid]).then(m => m.get(uid) || null),
     abnormalDays([uid], day).then(m => m.get(uid) || 0),
     personCost(ctx, uid),
-    prisma.leaveRequest.findMany({ where: { userId: uid, status: 'APPROVED', startDate: { gte: `${day.slice(0, 4)}-01-01` } } }),
+    leaveUsedByType(uid, Number(day.slice(0, 4))),
     balanceOf(uid, Number(day.slice(0, 4)))
   ])
   const allTypes = await prisma.leaveType.findMany()
   const types = new Map(allTypes.map(t => [t.code, t.name]))
   const balanced = new Set(allTypes.filter(t => t.balanced).map(t => t.code))
-  const leaveByType = {}
-  for (const r of leaveRows) leaveByType[types.get(r.typeCode) || r.typeCode] = Math.round(((leaveByType[types.get(r.typeCode) || r.typeCode] || 0) + Number(r.days)) * 10) / 10
   // 员工自己看画像：不显示「要留意的事」（那是给人事和负责人的）
   const flags = self && !hr ? [] : flagsFor({ employee: { ...emp, leaveDate: ymd(emp.leaveDate) }, contracts, last1v1: st?.last, openActions: st?.openActions || 0, abnormalDays: abn, today: day, settings: s })
   return {
     profile: profileDto(emp, day, hr),
-    approver: emp.approverId ? employeeBrief(await prisma.employee.findUnique({ where: { id: emp.approverId } })) : null,
     flags,
     contracts: seeContracts ? contracts.map(c => ({ ...contractDto(c, { emp, day, warnDays: s.contractWarnDays }), renewed: contracts.some(x => x.renewOfId === c.id) })) : null,
     cost,
@@ -125,7 +148,8 @@ export async function overview(ctx, { keyword, dept, flag } = {}) {
   const active = all.filter(e => e.active && !(e.leaveDate && ymd(e.leaveDate) < day))
   const ids = all.map(e => e.id)
   const cScope = await contractScope(ctx)
-  const [contracts, oneStats, abn, cost] = await Promise.all([contractsOf(ids), oneOnOneStats(ids), abnormalDays(ids, day), costSummary(ctx, { year })])
+  // 成本：名单里每人照常显示自己的；指标、图表不算不参与考核的人
+  const [contracts, oneStats, abn, costAll, cost] = await Promise.all([contractsOf(ids), oneOnOneStats(ids), abnormalDays(ids, day), costSummary(ctx, { year }), costSummary(ctx, { year, excludeExempt: true })])
   const cost$ = await costScope(ctx)
   const hr = scope.all
   const people = all.map(e => {
@@ -141,11 +165,14 @@ export async function overview(ctx, { keyword, dept, flag } = {}) {
       tenure: tenure(e.hireDate, day), age: e.birthDate ? yearsBetween(e.birthDate, day) : null, education: e.education,
       hireDate: ymd(e.hireDate), leaveDate: ymd(e.leaveDate),
       last1v1: st?.last?.date || null, mood: st?.last?.mood ?? null, openActions: st?.openActions || 0,
-      costYtd: inScope(cost$, e.id) && cost ? cost.byUser[e.id] || 0 : null,
+      costYtd: inScope(cost$, e.id) && costAll ? costAll.byUser[e.id] || 0 : null,
+      exemption: e.exemption || null, exemptNote: e.exemptNote || null,
       flags
     }
   })
-  const current = people.filter(p => !p.left)
+  // 指标、按部门、分布只算参与考核的在职人员（不参与考核的如董事单独计数，见 tiles.exempt）
+  const current = people.filter(p => !p.left && p.exemption !== 'FULL')
+  const counted = people.filter(p => p.exemption !== 'FULL')
   // 指标
   const n = current.length
   const withTenure = current.filter(p => p.tenure != null)
@@ -154,8 +181,8 @@ export async function overview(ctx, { keyword, dept, flag } = {}) {
   const has = (p, code) => p.flags.some(f => f.code === code)
   const tiles = {
     headcount: n,
-    joinedThisYear: people.filter(p => p.hireDate?.startsWith(year)).length,
-    leftThisYear: people.filter(p => p.leaveDate?.startsWith(year) && p.leaveDate <= day).length,
+    joinedThisYear: counted.filter(p => p.hireDate?.startsWith(year)).length,
+    leftThisYear: counted.filter(p => p.leaveDate?.startsWith(year) && p.leaveDate <= day).length,
     avgTenure: withTenure.length ? Math.round(withTenure.reduce((a, p) => a + p.tenure, 0) / withTenure.length * 10) / 10 : null,
     avgAge: current.filter(p => p.age != null).length ? Math.round(current.filter(p => p.age != null).reduce((a, p) => a + p.age, 0) / current.filter(p => p.age != null).length) : null,
     contractsExpiring: current.filter(p => has(p, 'LABOR_EXPIRING')).length,
@@ -167,7 +194,10 @@ export async function overview(ctx, { keyword, dept, flag } = {}) {
     costYtd: cost ? cost.total : null,
     // 人均只除以能看到成本的人（负责人看不到自己的）
     costPerHead: cost && current.some(p => p.costYtd != null) ? money(current.reduce((a, p) => a + (p.costYtd || 0), 0) / current.filter(p => p.costYtd != null).length) : null,
-    risk: current.filter(p => p.flags.some(f => f.level === 'risk')).length
+    risk: current.filter(p => p.flags.some(f => f.level === 'risk')).length,
+    // 豁免的在职人数：免考勤（指标照算）、不参与考核（指标不算）
+    attendanceExempt: people.filter(p => !p.left && p.exemption === 'ATTENDANCE').length,
+    exempt: people.filter(p => !p.left && p.exemption === 'FULL').length
   }
   // 按部门
   const depts = {}
@@ -208,6 +238,7 @@ export async function overview(ctx, { keyword, dept, flag } = {}) {
   else {
     list = list.filter(p => !p.left)
     if (flag === 'ANY') list = list.filter(p => p.flags.some(f => f.level !== 'info'))
+    else if (flag === 'EXEMPT') list = list.filter(p => p.exemption)
     else if (flag) list = list.filter(p => has(p, flag))
   }
   return {

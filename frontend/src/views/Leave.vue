@@ -1,76 +1,49 @@
 <template>
   <div class="page">
     <div class="page-head">
-      <h2>请假</h2>
-      <el-button type="primary" @click="openApply">申请请假</el-button>
+      <h2>我的假期</h2>
+      <div class="toolbar">
+        <el-radio-group v-model="category" @change="load">
+          <el-radio-button value="">全部</el-radio-button>
+          <el-radio-button value="LEAVE">请假</el-radio-button>
+          <el-radio-button value="TRIP">出差</el-radio-button>
+          <el-radio-button value="OUT">外出</el-radio-button>
+        </el-radio-group>
+        <el-date-picker v-model="yearStr" type="year" value-format="YYYY" :clearable="false" style="width: 110px" @change="load" />
+      </div>
     </div>
 
     <div class="tiles balances">
       <div v-for="b in balance.items" :key="b.code" class="tile link-tile" @click="openLedger(b)">
-        <div class="v">{{ b.available }}<span class="unit">天</span></div>
-        <div class="k">{{ balance.year }} 年{{ b.name }}可用</div>
-        <div class="k">余额 {{ b.balance }} · 待审批 {{ b.pending }}</div>
+        <div class="v">{{ days(b.available) }}<span class="unit">天</span></div>
+        <div class="k">{{ balance.year }} 年{{ b.name }}余额</div>
       </div>
-      <div v-if="!balance.items?.length" class="muted small">没有需要余额的假期类型</div>
+      <div v-for="(d, k) in used" :key="k" class="tile">
+        <div class="v">{{ days(d) }}<span class="unit">天</span></div>
+        <div class="k">{{ year }} 年已休{{ k }}</div>
+      </div>
     </div>
 
     <div class="card">
-      <h3>我的请假</h3>
+      <h3>请假、出差、外出记录</h3>
       <div class="table-wrap">
         <el-table v-loading="loading" :data="list" size="small">
-          <el-table-column label="类型" min-width="70"><template #default="{ row }">{{ typeName(row.typeCode) }}</template></el-table-column>
-          <el-table-column label="时间" min-width="200"><template #default="{ row }">{{ range(row) }}</template></el-table-column>
-          <el-table-column label="天数" prop="days" width="60" />
-          <el-table-column label="状态" min-width="80"><template #default="{ row }"><el-tag :type="LEAVE_STATUS[row.status]" size="small">{{ row.statusLabel }}</el-tag></template></el-table-column>
-          <el-table-column label="审批人" min-width="80"><template #default="{ row }">{{ row.decider?.name || row.approver?.name || '人事' }}</template></el-table-column>
-          <el-table-column label="事由 / 意见" min-width="160">
-            <template #default="{ row }">{{ row.reason }}<div v-if="row.decisionNote" class="muted small">意见：{{ row.decisionNote }}</div></template>
-          </el-table-column>
-          <el-table-column label="" width="70" fixed="right">
-            <template #default="{ row }"><el-button v-if="canCancel(row)" link type="danger" @click="cancel(row)">撤销</el-button></template>
-          </el-table-column>
+          <el-table-column label="类别" min-width="60"><template #default="{ row }">{{ row.categoryLabel }}</template></el-table-column>
+          <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ row.typeName || '—' }}</template></el-table-column>
+          <el-table-column label="时间" min-width="230"><template #default="{ row }">{{ span(row) }}</template></el-table-column>
+          <el-table-column label="时长" min-width="80"><template #default="{ row }">{{ row.reportedDays != null ? days(row.reportedDays) + ' 天' : row.hours != null ? row.hours + ' 小时' : '' }}</template></el-table-column>
+          <el-table-column label="计入工作日" min-width="90"><template #default="{ row }">{{ days(row.workDays) }} 天</template></el-table-column>
+          <el-table-column label="来源" prop="sourceLabel" min-width="80" />
         </el-table>
       </div>
+      <p class="help">请假、出差、外出在{{ sourceNames }}里提交和审批，审批通过后自动同步过来（每 30 分钟左右）。年假、调休这类扣余额的假，同步过来时自动从余额里扣，撤销了自动退回。</p>
     </div>
-
-    <el-dialog v-model="apply.open" title="申请请假" width="min(520px, 94vw)">
-      <el-form label-width="80px" @submit.prevent>
-        <el-form-item label="类型">
-          <el-select v-model="apply.form.typeCode" style="width: 100%">
-            <el-option v-for="t in types" :key="t.code" :value="t.code" :label="t.name">
-              {{ t.name }}<span class="muted small" style="margin-left: 8px">{{ t.unit === 'DAY' ? '按整天' : '可请半天' }}</span>
-            </el-option>
-          </el-select>
-          <div v-if="curType?.note" class="help">{{ curType.note }}</div>
-        </el-form-item>
-        <el-form-item label="开始">
-          <div class="row">
-            <el-date-picker v-model="apply.form.startDate" value-format="YYYY-MM-DD" :clearable="false" style="flex: 1" />
-            <el-select v-if="half" v-model="apply.form.startHalf" style="width: 90px"><el-option value="AM" label="上午" /><el-option value="PM" label="下午" /></el-select>
-          </div>
-        </el-form-item>
-        <el-form-item label="结束">
-          <div class="row">
-            <el-date-picker v-model="apply.form.endDate" value-format="YYYY-MM-DD" :clearable="false" style="flex: 1" />
-            <el-select v-if="half" v-model="apply.form.endHalf" style="width: 90px"><el-option value="AM" label="上午" /><el-option value="PM" label="下午" /></el-select>
-          </div>
-        </el-form-item>
-        <el-form-item label="天数">
-          <b>{{ apply.estimate ?? '-' }}</b><span class="muted small" style="margin-left: 8px">按工作日计，周末和节假日不算</span>
-        </el-form-item>
-        <el-form-item label="事由"><el-input v-model="apply.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="apply.open = false">取消</el-button>
-        <el-button type="primary" :loading="apply.saving" :disabled="!apply.estimate" @click="submit">提交</el-button>
-      </template>
-    </el-dialog>
 
     <el-drawer v-model="ledger.open" :title="`${ledger.title} · 余额明细`" size="min(520px, 100vw)">
       <el-table :data="ledger.rows" size="small">
         <el-table-column label="时间" min-width="140"><template #default="{ row }">{{ fmtTime(row.createdAt) }}</template></el-table-column>
         <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ LEDGER_KIND[row.kind] || row.kind }}</template></el-table-column>
-        <el-table-column label="天数" min-width="60"><template #default="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</template></el-table-column>
+        <el-table-column label="天数" min-width="60"><template #default="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ days(row.delta) }}</template></el-table-column>
         <el-table-column label="说明" prop="note" min-width="160" />
       </el-table>
     </el-drawer>
@@ -78,65 +51,35 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
-import { LEAVE_STATUS, LEDGER_KIND, fmtTime, range, today } from '../labels.js'
+import { me } from '../me.js'
+import { LEDGER_KIND, days, fmtTime, span, thisYear } from '../labels.js'
 
+const yearStr = ref(String(thisYear()))
+const year = computed(() => Number(yearStr.value))
+const category = ref('')
 const balance = ref({ items: [] })
 const list = ref([])
-const types = ref([])
 const loading = ref(false)
-const typeName = (c) => types.value.find(t => t.code === c)?.name || c
-
-const apply = reactive({ open: false, saving: false, estimate: null, form: {} })
-const curType = computed(() => types.value.find(t => t.code === apply.form.typeCode))
-const half = computed(() => curType.value?.unit !== 'DAY')
+const sourceNames = computed(() => me.sources?.map(s => s.label).join(' / ') || '钉钉 / 飞书 / 企业微信')
+// 今年各类请假用了多少（按记录的工作日天数，只算落在这一年的）
+const used = computed(() => {
+  const out = {}
+  for (const a of list.value) if (a.category === 'LEAVE') out[a.typeName || '请假'] = (out[a.typeName || '请假'] || 0) + a.workDays
+  return out
+})
 
 async function load() {
   loading.value = true
   try {
-    ;[balance.value, list.value] = await Promise.all([api.get('balance/mine'), api.get('leave/mine')])
+    ;[balance.value, list.value] = await Promise.all([
+      api.get('balance/mine', { year: year.value }),
+      api.get('absences', { from: `${year.value}-01-01`, to: `${year.value}-12-31`, category: category.value })
+    ])
   } finally { loading.value = false }
 }
-onMounted(async () => { types.value = await api.get('leave/types'); load() })
-
-function openApply() {
-  const d = today()
-  apply.form = { typeCode: types.value[0]?.code, startDate: d, startHalf: 'AM', endDate: d, endHalf: 'PM', reason: '' }
-  apply.open = true
-}
-
-let seq = 0
-watch(() => [apply.open, apply.form.typeCode, apply.form.startDate, apply.form.startHalf, apply.form.endDate, apply.form.endHalf], async () => {
-  if (!apply.open) return
-  if (!half.value) { apply.form.startHalf = 'AM'; apply.form.endHalf = 'PM' }
-  const f = apply.form
-  if (!f.startDate || !f.endDate || f.endDate < f.startDate) { apply.estimate = null; return }
-  const n = ++seq
-  try {
-    const r = await api.get('leave/estimate', { startDate: f.startDate, startHalf: f.startHalf, endDate: f.endDate, endHalf: f.endHalf, typeCode: f.typeCode })
-    if (n === seq) apply.estimate = r.days
-  } catch { if (n === seq) apply.estimate = null }
-})
-
-async function submit() {
-  apply.saving = true
-  try {
-    const r = await api.post('leave', apply.form)
-    ElMessage.success(`已提交，等${r.approver?.name || '人事'}审批`)
-    apply.open = false
-    load()
-  } finally { apply.saving = false }
-}
-
-const canCancel = (r) => r.status === 'PENDING' || (r.status === 'APPROVED' && r.startDate > today())
-async function cancel(r) {
-  await ElMessageBox.confirm(`撤销 ${range(r)} 的${typeName(r.typeCode)}？${r.status === 'APPROVED' ? '已扣的余额会退回。' : ''}`, '撤销请假', { type: 'warning' })
-  await api.post(`leave/${r.id}/cancel`)
-  ElMessage.success('已撤销')
-  load()
-}
+onMounted(load)
 
 const ledger = reactive({ open: false, title: '', rows: [] })
 async function openLedger(b) {
@@ -147,9 +90,8 @@ async function openLedger(b) {
 </script>
 
 <style scoped>
-.row { display: flex; gap: 8px; width: 100%; }
 .unit { font-size: 13px; font-weight: 400; margin-left: 2px; }
 .link-tile { cursor: pointer; }
 .link-tile:hover { border-color: var(--hr-primary); }
-.balances { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.balances { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 </style>

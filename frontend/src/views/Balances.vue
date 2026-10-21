@@ -11,7 +11,7 @@
       <el-button type="primary" @click="grantPreview">发放 {{ year }} 年年假</el-button>
       <el-button @click="openAdjust()">调整余额</el-button>
       <el-button @click="carryPreview">{{ year }} 年年末结转</el-button>
-      <el-button @click="imp.open = true">批量导入日期</el-button>
+      <el-button @click="$router.push('/import')">导入日期 / 余额</el-button>
     </div>
 
     <div class="card table-wrap">
@@ -22,11 +22,9 @@
         <el-table-column label="参加工作" min-width="100">
           <template #default="{ row }"><span v-if="row.workStartDate">{{ row.workStartDate }}</span><span v-else class="warn">未填</span></template>
         </el-table-column>
-        <el-table-column label="审批人" min-width="80"><template #default="{ row }">{{ row.approver?.name || '' }}</template></el-table-column>
         <el-table-column v-for="t in data.types" :key="t.code" :label="t.name" min-width="90" align="right">
           <template #default="{ row }">
             <span class="link" @click="openLedger(row, t)">{{ row.balances[t.code]?.balance ?? 0 }}</span>
-            <span v-if="row.balances[t.code]?.pending" class="muted small">（待 {{ row.balances[t.code].pending }}）</span>
           </template>
         </el-table-column>
         <el-table-column label="" width="110" fixed="right">
@@ -44,9 +42,6 @@
       <el-form label-width="90px" @submit.prevent>
         <el-form-item label="入职日期"><el-date-picker v-model="edit.form.hireDate" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
         <el-form-item label="参加工作"><el-date-picker v-model="edit.form.workStartDate" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
-        <el-form-item label="指定审批人">
-          <EmployeePicker v-model="edit.form.approverId" :initial="edit.approver" placeholder="不指定则找部门负责人，再找人事" />
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="edit.open = false">取消</el-button>
@@ -96,8 +91,6 @@
     <!-- 年末结转预览 -->
     <el-dialog v-model="carry.open" :title="`${year} 年年假年末结转`" width="min(640px, 96vw)">
       <p v-if="carry.data">每人最多转 <b>{{ carry.data.maxDays }}</b> 天到 {{ year + 1 }} 年，其余清零（上限在「设置 → 规则」里改）。共 {{ carry.data.rows.length }} 人。</p>
-      <el-alert v-if="carry.data?.skippedPending" type="warning" :closable="false" style="margin-bottom: 10px"
-        :title="`${carry.data.skippedPending} 人还有待审批的年假，这次跳过，审批完再结转一次`" />
       <div class="table-wrap">
         <el-table :data="carry.data?.rows || []" size="small" max-height="400">
           <el-table-column label="员工" min-width="90"><template #default="{ row }">{{ row.employee?.name }}</template></el-table-column>
@@ -109,16 +102,6 @@
       <template #footer>
         <el-button @click="carry.open = false">取消</el-button>
         <el-button type="primary" :disabled="!carry.data?.rows.length" :loading="carry.saving" @click="carryConfirm">确认结转</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 批量导入日期 -->
-    <el-dialog v-model="imp.open" title="批量导入入职 / 参加工作日期" width="min(560px, 96vw)">
-      <p class="help">每行一人：工号或姓名, 入职日期, 参加工作日期（逗号或 Tab 分隔，可直接从表格粘贴）。日期写 YYYY-MM-DD，不改的列留空。</p>
-      <el-input v-model="imp.text" type="textarea" :rows="10" placeholder="E0052, 2021-03-15, 2012-07-01&#10;张三, 2024-09-01, 2019-07-01" />
-      <template #footer>
-        <el-button @click="imp.open = false">取消</el-button>
-        <el-button type="primary" :loading="imp.saving" @click="saveImport">导入</el-button>
       </template>
     </el-dialog>
 
@@ -152,14 +135,14 @@ async function load() {
 }
 onMounted(load)
 
-const edit = reactive({ open: false, saving: false, id: null, name: '', approver: null, form: {} })
+const edit = reactive({ open: false, saving: false, id: null, name: '', form: {} })
 function openEdit(row) {
-  Object.assign(edit, { open: true, id: row.employee.id, name: row.employee.name, approver: row.approver, form: { hireDate: row.hireDate, workStartDate: row.workStartDate, approverId: row.approver?.id ?? null } })
+  Object.assign(edit, { open: true, id: row.employee.id, name: row.employee.name, form: { hireDate: row.hireDate, workStartDate: row.workStartDate } })
 }
 async function saveEdit() {
   edit.saving = true
   try {
-    await api.patch(`employees/${edit.id}`, { hireDate: edit.form.hireDate || null, workStartDate: edit.form.workStartDate || null, approverId: edit.form.approverId || null })
+    await api.patch(`employees/${edit.id}`, { hireDate: edit.form.hireDate || null, workStartDate: edit.form.workStartDate || null })
     ElMessage.success('已保存')
     edit.open = false
     load()
@@ -212,18 +195,6 @@ async function carryConfirm() {
     carry.open = false
     load()
   } finally { carry.saving = false }
-}
-
-const imp = reactive({ open: false, saving: false, text: '' })
-async function saveImport() {
-  imp.saving = true
-  try {
-    const r = await api.post('employees/import-dates', { text: imp.text })
-    ElMessage.success(`已导入 ${r.saved} 人`)
-    imp.open = false
-    imp.text = ''
-    load()
-  } finally { imp.saving = false }
 }
 
 const ledger = reactive({ open: false, title: '', rows: [] })

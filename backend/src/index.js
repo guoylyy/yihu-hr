@@ -26,7 +26,7 @@ app.get('/health', async (req, res) => {
   }
 })
 
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '5mb' })) // 智能导入会把整张表传上来
 // MCP 自己校验平台带来的 access_token
 mountMcp(app)
 
