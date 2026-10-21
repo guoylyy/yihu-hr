@@ -29,7 +29,7 @@ cd frontend && npm run build                # 前端没有测试，至少确认�
 11. 前端请求、链接用相对路径（`api/x`，不是 `/api/x`），路由用 hash：应用挂在 `/apps/hr/` 下
 12. `src/lib/yh-one.mjs` 是平台 SDK 的副本，以平台仓库 `console/frontend/public/sdk/yh-one.mjs` 为准，不要在这里改
 13. **人员数据的可见范围**都在 `services/access.js`：`contractScope`（人事全部，负责人看下属——设置能关，本人看自己）、`costScope`（人事全部，负责人看下属——设置能关，看不到自己）、`canLog1v1`（人事或负责人，不能给自己记）。新接口按它们收敛，不要另写判断
-14. **敏感内容不出应用**：成本金额、1v1 纪要和私人备注、合同内容不放进 `audit` 的 `detail`（它会上报平台使用数据）；1v1 的私人备注只给记录人和人事
+14. **敏感内容不出应用**：成本金额、1v1 纪要和私人备注、导入的原始纪要、合同内容不放进 `audit` 的 `detail`（它会上报平台使用数据）；1v1 的私人备注只给记录人和人事；原始纪要（文件、全文）给记录人、上级、人事，本人只在 `sourceShared` 时能看。纪要文件的 key 固定是 `one-on-ones/<userId>/…`（保存时校验）
 15. 合同、成本、画像的规则（状态、法定试用期上限、竞业限制期、按标准生成成本、要留意的标记）是纯逻辑，放在 `lib/contracts.js`、`lib/cost.js`、`lib/portrait.js`，改了要补 `test/people.test.js`
 16. 合同文件放平台文件存储，key 固定是 `contracts/<userId>/…`（保存时校验），下载只走 `GET /api/contracts/:id/file`（检查权限后跳限时地址）
 17. **智能导入**：规则在 `lib/importer.js`（表头同义词、值的规范化、比对，改了补 `test/importer.test.js`），对人在 `lib/nameMatch.js`（只有工号、完全相同、确认过的别名能直接认，其余一律要人事确认；改了补 `test/nameMatch.test.js`），大模型只认规则认不出的（`services/importer.js`，走平台 `ws.llm`），模型的输出也要再过规则校验；一律先预览、确认后才写

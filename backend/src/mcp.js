@@ -163,7 +163,8 @@ const TOOLS = [
   },
   {
     name: 'log_one_on_one',
-    description: '替负责人记一次 1v1：和谁、哪天、聊了什么、状态（1 ~ 5）、待办、下次时间。只能给自己的下属记（人事能给任何人记）。纪要默认本人可见，私人备注只有记录人和人事能看',
+    description: '替负责人记一次 1v1：和谁、哪天、聊了什么、状态（1 ~ 5）、待办、下次时间。只能给自己的下属记（人事能给任何人记）。纪要默认本人可见，私人备注只有记录人和人事能看。' +
+      '用户给的是会议纪要原文 / 录音转写（很长的一段）时，放进 sourceText：原文跟着记录存，notes 不填的话由应用自动整理出纪要、话题、待办、状态',
     inputSchema: obj({
       userId: { type: 'number' }, name: { type: 'string', description: '对方姓名' },
       date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' },
@@ -173,11 +174,21 @@ const TOOLS = [
       topics: { type: 'array', items: { type: 'string' }, description: '话题，如 工作进展、困难与支持、职业发展' },
       actions: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, owner: { type: 'string', enum: ['EMPLOYEE', 'MANAGER'] }, due: { type: 'string' } } }, description: '待办' },
       nextDate: { type: 'string', description: '下次 1v1 日期 YYYY-MM-DD' },
-      shared: { type: 'boolean', description: '纪要和待办本人是否可见，默认 true' }
-    }, ['notes']),
+      shared: { type: 'boolean', description: '纪要和待办本人是否可见，默认 true' },
+      sourceText: { type: 'string', description: '会议纪要原文 / 录音转写全文（可选）' }
+    }),
     run: async (ctx, a) => {
       const userId = await findPerson(ctx, a)
-      const m = await oneOnOne.save(ctx, { ...a, userId, date: a.date || await contracts.today() })
+      let extra = {}
+      if (a.sourceText) {
+        const p = await oneOnOne.parseMinutes(ctx, { userId, text: a.sourceText })
+        const d = p.draft
+        extra = {
+          sourceText: p.sourceText, parsed: { ...d, by: p.by, at: p.parsedAt },
+          ...(a.notes ? {} : { notes: d.summary, topics: a.topics || d.topics, actions: a.actions || d.actions, mood: a.mood ?? d.mood, nextDate: a.nextDate || d.nextDate, privateNote: a.privateNote || d.observations, date: a.date || d.date })
+        }
+      } else if (!a.notes) throw Object.assign(new Error('要给纪要（notes）或会议纪要原文（sourceText）'), { status: 400 })
+      const m = await oneOnOne.save(ctx, { ...a, ...extra, userId, date: extra.date || a.date || await contracts.today() })
       return { id: m.id, employee: m.employee?.name, date: m.date, url: appUrl(`/one-on-ones?user=${userId}`) }
     }
   },

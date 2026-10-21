@@ -371,6 +371,15 @@ model OneOnOne {
   actions     Json?
   nextDate    String?   @db.VarChar(10)
   shared      Boolean   @default(true)
+  /// 导入的会议纪要：原文件（以虎 One 文件存储，key 固定是 one-on-ones/<userId>/…）、识别出的全文、模型解析的结果
+  sourceFileKey  String?  @db.VarChar(500)
+  sourceFileName String?  @db.VarChar(200)
+  sourceFileSize Int?
+  /// 纪要全文（从文件里抽出来的或粘贴的）；记录人、上级、人事能看，本人只在 sourceShared 时能看
+  sourceText     String?  @db.MediumText
+  sourceShared   Boolean  @default(false)
+  /// 解析结果 { summary, topics, actions, mood, moodReason, nextDate, observations, by: AI | RULE, at }，留着对照
+  parsed         Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

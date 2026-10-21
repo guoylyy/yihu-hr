@@ -113,6 +113,10 @@ r.get('/one-on-ones', wrap(req => oneOnOne.listFor(req.ctx, req.query)))
 r.post('/one-on-ones', wrap(req => oneOnOne.save(req.ctx, req.body)))
 r.delete('/one-on-ones/:id', wrap(req => oneOnOne.remove(req.ctx, id(req))))
 r.post('/one-on-ones/:id/action', wrap(req => oneOnOne.toggleAction(req.ctx, id(req), req.body)))
+r.post('/one-on-ones/upload-token', wrap(req => oneOnOne.uploadToken(req.ctx, req.body)))
+r.post('/one-on-ones/parse', wrap(req => oneOnOne.parseMinutes(req.ctx, req.body)))
+r.get('/one-on-ones/:id/source', wrap(req => oneOnOne.sourceOf(req.ctx, id(req))))
+r.get('/one-on-ones/:id/file', wrap(async (req, res) => res.redirect(302, await oneOnOne.sourceFileUrl(req.ctx, id(req)))))
 
 // 设置
 r.get('/settings', wrap(req => settings.listSettings(req.ctx)))
