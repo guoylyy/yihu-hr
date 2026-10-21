@@ -126,6 +126,11 @@ model SyncRun {
   unmatched  Int       @default(0)
   /// 同步到的请假 / 出差 / 外出条数
   absences   Int       @default(0)
+  /// 请假 / 出差 / 外出这一步：成功没有、拉的日期范围、出错信息（打卡成功、请假失败时 ok 仍是 true）
+  absenceOk    Boolean?
+  absenceFrom  String?  @db.VarChar(10)
+  absenceTo    String?  @db.VarChar(10)
+  absenceError String?  @db.Text
   error      String?   @db.Text
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -369,4 +374,24 @@ model OneOnOne {
 
   @@index([userId, date])
   @@index([managerId, date])
+}
+
+/// 同步时「已经查过、不用再查」的东西（钉钉按审批实例逐个补查出差 / 外出、请假类型，查过的记下来，省接口调用量）
+model SyncSeen {
+  source    String   @db.VarChar(10)
+  key       String   @db.VarChar(128)
+  createdAt DateTime @default(now())
+
+  @@id([source, key])
+}
+
+/// 导入时确认过的别名：表里写的「郭老师」「顾一（产品）」= 哪个人。下次导入直接认，不用再确认
+model NameAlias {
+  alias     String   @id @db.VarChar(50)
+  userId    Int
+  createdBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

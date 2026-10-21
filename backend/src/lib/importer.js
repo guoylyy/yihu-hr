@@ -171,23 +171,6 @@ export function normalizeValue(field, raw, { today } = {}) {
   return value == null ? { error: true } : { value }
 }
 
-/** 按工号、再按姓名找人。返回 { employee } / { error } */
-export function matchEmployee({ name, jobNumber }, employees) {
-  const no = String(jobNumber ?? '').trim()
-  const nm = String(name ?? '').trim()
-  if (no) {
-    const hit = employees.find(e => e.jobNumber && e.jobNumber === no)
-    if (hit) return { employee: hit }
-  }
-  if (nm) {
-    const hits = employees.filter(e => e.name === nm)
-    if (hits.length === 1) return { employee: hits[0] }
-    if (hits.length > 1) return { error: `有 ${hits.length} 个「${nm}」，请在表里加上工号` }
-  }
-  if (!nm && !no) return { error: '这一行没有姓名和工号' }
-  return { error: `找不到「${nm || no}」${no && nm ? `（工号 ${no}）` : ''}，平台上可能还没有这个人` }
-}
-
 const tagsEq = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort())
 
 /**

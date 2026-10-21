@@ -169,8 +169,10 @@ test('钉钉请假：一次 100 人、分页 20 条，时间按时区换成毫�
     '/gettoken': { errcode: 0, access_token: 'T', expires_in: 7200 },
     '/getleavestatus': (c) => (c.body.offset === 0 ? { errcode: 0, result: { has_more: true, leave_status: [leave(1)] } } : { errcode: 0, result: { has_more: false, leave_status: [leave(2)] } })
   })
-  const out = await dingtalk.fetchAbsences(['u1', 'u2'], '2026-10-15', '2026-10-16', TZ)
+  // 都已经知道类型了：不逐条补查
+  const out = await dingtalk.fetchAbsences(['u1', 'u2'], '2026-10-15', '2026-10-16', TZ, { known: () => true })
   assert.equal(out.length, 2)
+  assert.equal(calls.filter(c => c.url.includes('/getupdatedata')).length, 0)
   const q = calls.filter(c => c.url.includes('/getleavestatus'))
   assert.equal(q[0].body.userid_list, 'u1,u2')
   assert.equal(q[0].body.size, 20)
@@ -219,4 +221,29 @@ test('企业微信日报：只要请假、出差、外出，时长按天 / 按�
   const list = wcDay(d, TZ)
   assert.deepEqual(list.map(x => [x.category, x.typeName, x.startDate, x.days, x.hours]), [['LEAVE', '年假', '2026-10-15', 0.5, null], ['LEAVE', '事假', '2026-10-15', null, 2], ['TRIP', '出差', '2026-10-15', 1, null]])
   assert.equal(list[0].externalId, 'w1:2026-10-15:1:7')
+})
+
+test('钉钉逐条补查：请假补上类型，挂了审批的打卡日拿出差 / 外出，查过的不再查', async () => {
+  process.env.DINGTALK_APP_KEY = 'k'; process.env.DINGTALK_APP_SECRET = 's'
+  dingtalk._token.reset()
+  const s = Date.parse('2026-10-15T09:00:00+08:00'), e = Date.parse('2026-10-15T18:00:00+08:00')
+  const calls = stub({
+    '/gettoken': { errcode: 0, access_token: 'T', expires_in: 7200 },
+    '/getleavestatus': { errcode: 0, result: { has_more: false, leave_status: [{ userid: 'u1', start_time: s, end_time: e, duration_unit: 'percent_day', duration_percent: 100 }] } },
+    '/getupdatedata': (c) => ({
+      errcode: 0,
+      result: c.body.work_date.startsWith('2026-10-15')
+        ? { approve_list: [{ tag_name: '请假', sub_type: '年假', begin_time: '2026-10-15 09:00', end_time: '2026-10-15 18:00', procInst_id: 'P1', duration: '1', duration_unit: 'DAY' }] }
+        : { approve_list: [{ tag_name: '出差', sub_type: '出差', begin_time: '2026-10-19 09:00', end_time: '2026-10-20 18:00', procInst_id: 'P2', duration: '2', duration_unit: 'DAY' }, { tag_name: '加班', begin_time: '2026-10-19 19:00', end_time: '2026-10-19 21:00' }] }
+    })
+  })
+  const hints = [{ userid: 'u1', day: '2026-10-19', key: 'proc:P2' }, { userid: 'u1', day: '2026-10-19', key: 'proc:P2' }, { userid: 'u1', day: '2026-10-21', key: 'proc:OLD' }, { userid: 'u9', day: '2026-10-19', key: 'proc:X' }]
+  const out = await dingtalk.fetchAbsences(['u1'], '2026-10-15', '2026-10-21', TZ, { hints, known: (k) => k === 'proc:OLD' })
+  assert.deepEqual(out.map(x => [x.category, x.typeName, x.startDate, x.endDate, x.days]), [['LEAVE', '年假', '2026-10-15', '2026-10-15', 1], ['TRIP', '出差', '2026-10-19', '2026-10-20', 2]])
+  assert.equal(out[1].externalId, 'appr:P2')
+  // 只查了两天：请假的第一天、挂了新审批的那天（查过的、别人的不查）
+  assert.deepEqual(calls.filter(c => c.url.includes('/getupdatedata')).map(c => c.body), [{ userid: 'u1', work_date: '2026-10-19 00:00:00' }, { userid: 'u1', work_date: '2026-10-15 00:00:00' }])
+  assert.deepEqual(out.checked.sort(), [`u1:${s}:${e}`, 'proc:P2'].sort())
+  assert.equal(dingtalk.approvalHint({ vendorUserId: 'u1', workDate: '2026-10-19', raw: { procInstId: 'P2' } }).key, 'proc:P2')
+  assert.equal(dingtalk.approvalHint({ vendorUserId: 'u1', workDate: '2026-10-19', raw: {} }), null)
 })

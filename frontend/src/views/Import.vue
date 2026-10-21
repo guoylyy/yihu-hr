@@ -62,29 +62,60 @@
         <div class="toolbar between">
           <h3>预览</h3>
           <el-radio-group v-model="filter" size="small">
-            <el-radio-button value="changes">有改动（{{ result.summary.withChanges }}）</el-radio-button>
-            <el-radio-button value="error">对不上（{{ result.summary.unmatched }}）</el-radio-button>
-            <el-radio-button value="all">全部（{{ result.summary.rows }}）</el-radio-button>
+            <el-radio-button value="confirm">待确认（{{ counts.confirm }}）</el-radio-button>
+            <el-radio-button value="changes">要导入（{{ counts.included }}）</el-radio-button>
+            <el-radio-button value="error">对不上（{{ counts.error }}）</el-radio-button>
+            <el-radio-button value="all">全部（{{ result.rows.length }}）</el-radio-button>
           </el-radio-group>
         </div>
+        <el-alert v-if="counts.confirm" type="warning" :closable="false" style="margin-bottom: 10px">
+          <template #title>
+            {{ counts.confirm }} 行的名字和平台上不完全一样（带备注、称呼、拼音、同音字……），给了最像的人，请确认是不是同一个人。确认过的名字会记住，下次直接认。
+            <el-button size="small" style="margin-left: 8px" @click="acceptAll">全部采用建议</el-button>
+          </template>
+        </el-alert>
         <div class="table-wrap">
-          <el-table ref="table" :data="shown" size="small" row-key="row" max-height="520" @selection-change="sel = $event">
-            <el-table-column type="selection" width="36" :selectable="r => !!r.employee && !r.error && r.changes.length > 0" reserve-selection />
-            <el-table-column label="行" prop="row" width="54" />
+          <el-table :data="shown" size="small" row-key="row" max-height="560" :row-class-name="({ row }) => (dupOf(row) ? 'dup-row' : '')">
+            <el-table-column width="40">
+              <template #header><el-checkbox :model-value="allIncluded" :indeterminate="counts.included > 0 && !allIncluded" @change="toggleAll" /></template>
+              <template #default="{ row }"><el-checkbox v-model="row.include" :disabled="!row.confirmed || !changesOf(row).length" /></template>
+            </el-table-column>
+            <el-table-column label="行" prop="row" width="50" />
             <el-table-column label="表里的人" min-width="110"><template #default="{ row }">{{ row.who.name }}<span v-if="row.who.jobNumber" class="muted small"> {{ row.who.jobNumber }}</span></template></el-table-column>
-            <el-table-column label="对应员工" min-width="140">
+            <el-table-column label="对应员工" min-width="250">
               <template #default="{ row }">
-                <template v-if="row.employee">{{ row.employee.name }}<div class="muted small">{{ row.employee.deptPath }}</div></template>
-                <span v-if="row.error" class="bad small">{{ row.error }}</span>
+                <template v-if="row.status === 'auto'">
+                  {{ row.employee.name }} <span class="muted small">{{ row.employee.deptPath }} · 按{{ row.method }}</span>
+                </template>
+                <template v-else-if="row.status === 'confirm'">
+                  <div class="pick">
+                    <el-select v-model="row.pick" size="small" style="width: 210px" @change="row.confirmed = true; row.include = changesOf(row).length > 0">
+                      <el-option v-for="c in row.candidates" :key="c.employee.id" :value="c.employee.id" :label="c.employee.name">
+                        <span>{{ c.employee.name }}</span><span class="muted small" style="margin-left: 6px">{{ c.employee.deptPath }} · {{ c.reason }}</span>
+                      </el-option>
+                      <el-option :value="0" label="都不是，我自己选…" />
+                    </el-select>
+                    <el-button v-if="!row.confirmed && row.pick" size="small" type="primary" plain @click="confirmRow(row)">是他</el-button>
+                    <el-tag v-else-if="row.confirmed && row.pick" size="small" type="success" disable-transitions>已确认</el-tag>
+                  </div>
+                  <div v-if="cand(row)" class="muted small">{{ cand(row).reason }}</div>
+                  <EmployeePicker v-if="row.pick === 0" v-model="row.manual" size="small" placeholder="搜索姓名、工号" @update:model-value="pickManual(row, $event)" />
+                </template>
+                <template v-else-if="row.status === 'none'">
+                  <span class="bad small">{{ row.error }}</span>
+                  <EmployeePicker v-model="row.manual" placeholder="手工指定是谁…" @update:model-value="pickManual(row, $event)" />
+                </template>
+                <span v-else class="bad small">{{ row.error }}</span>
+                <div v-if="dupOf(row)" class="bad small">和第 {{ dupOf(row) }} 行是同一个人，只能导一行</div>
               </template>
             </el-table-column>
             <el-table-column label="要改的" min-width="360">
               <template #default="{ row }">
                 <div class="changes">
-                  <span v-for="c in row.changes" :key="c.field" class="chg" :title="c.derived ? `按「${c.derived}」推算` : ''">
-                    <b>{{ c.label }}</b> <span class="muted">{{ c.fromText ?? '空' }}</span> → <span class="to">{{ c.toText }}</span><span v-if="c.derived" class="muted">（推算）</span>
+                  <span v-for="c in changesOf(row)" :key="c.field" class="chg" :title="c.derived ? `按「${c.derived}」推算` : ''">
+                    <b>{{ c.label }}</b> <template v-if="!manualOnly(row)"><span class="muted">{{ c.fromText ?? '空' }}</span> → </template><span class="to">{{ c.toText }}</span><span v-if="c.derived" class="muted">（推算）</span>
                   </span>
-                  <span v-if="row.employee && !row.error && !row.changes.length" class="muted small">没有要改的</span>
+                  <span v-if="row.confirmed && !changesOf(row).length" class="muted small">没有要改的</span>
                 </div>
                 <div v-if="row.unparsed.length" class="small warn">看不懂：{{ row.unparsed.map(u => `${u.label}「${u.raw}」`).join('、') }}</div>
               </template>
@@ -92,7 +123,8 @@
           </el-table>
         </div>
         <div class="toolbar" style="margin-top: 12px">
-          <el-button type="primary" :disabled="!sel.length" :loading="saving" @click="apply">导入选中的 {{ sel.length }} 人</el-button>
+          <el-button type="primary" :disabled="!counts.included || counts.dups > 0" :loading="saving" @click="apply">导入勾选的 {{ counts.included }} 人</el-button>
+          <span v-if="counts.dups" class="bad small">有 {{ counts.dups }} 个人对应了好几行，先去掉多余的</span>
           <span class="muted small">余额是「设为」这个数（补一条导入流水），之后钉钉 / 飞书 / 企业微信里批的年假、调休会接着自动扣</span>
         </div>
       </div>
@@ -101,10 +133,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api.js'
 import { thisYear } from '../labels.js'
+import EmployeePicker from '../components/EmployeePicker.vue'
 
 const yearStr = ref(String(thisYear()))
 const mode = ref('file')
@@ -114,16 +147,44 @@ const saving = ref(false)
 const result = ref(null)
 const mapping = ref([])
 const filter = ref('changes')
-const sel = ref([])
-const table = ref(null)
 const file = reactive({ name: '', wb: null, sheets: [], sheet: '', rows: [] })
 
+// 每一行：pick = 对到谁（0 = 自己选），confirmed = 人事确认过（直接认的算确认过），include = 要导入
+const cand = (r) => r.candidates?.find(c => c.employee.id === r.pick)
+const targetOf = (r) => (r.status === 'auto' ? r.employee.id : r.pick === 0 || r.status === 'none' ? r.manual || null : r.pick || null)
+// 对到候选的按候选算出的改动；自己指定的人只有「要写成什么」（不知道原来的值，写入时再比）
+const manualOnly = (r) => r.status !== 'auto' && !cand(r)
+const changesOf = (r) => (r.status === 'auto' ? r.changes : cand(r) ? cand(r).changes : targetOf(r) ? r.proposed : [])
+const included = computed(() => (result.value?.rows || []).filter(r => r.include && r.confirmed && targetOf(r) && changesOf(r).length))
+const dupOf = (r) => {
+  if (!r.include || !targetOf(r)) return null
+  const first = included.value.find(x => targetOf(x) === targetOf(r))
+  return first && first !== r ? first.row : null
+}
+const counts = computed(() => {
+  const rows = result.value?.rows || []
+  return {
+    confirm: rows.filter(r => r.status === 'confirm' && !r.confirmed).length,
+    included: included.value.length,
+    error: rows.filter(r => (r.status === 'none' && !r.manual) || r.status === 'dup').length,
+    dups: included.value.filter(dupOf).length
+  }
+})
+const allIncluded = computed(() => {
+  const can = (result.value?.rows || []).filter(r => r.confirmed && targetOf(r) && changesOf(r).length)
+  return can.length > 0 && can.every(r => r.include)
+})
+function toggleAll(v) { for (const r of result.value.rows) if (r.confirmed && targetOf(r) && changesOf(r).length) r.include = v }
 const shown = computed(() => {
   const rows = result.value?.rows || []
-  if (filter.value === 'changes') return rows.filter(r => r.employee && !r.error && r.changes.length)
-  if (filter.value === 'error') return rows.filter(r => r.error)
+  if (filter.value === 'confirm') return rows.filter(r => r.status === 'confirm')
+  if (filter.value === 'changes') return rows.filter(r => r.include)
+  if (filter.value === 'error') return rows.filter(r => r.status === 'none' || r.status === 'dup')
   return rows
 })
+function confirmRow(r) { r.confirmed = true; r.include = changesOf(r).length > 0 }
+function acceptAll() { for (const r of result.value.rows) if (r.status === 'confirm' && !r.confirmed && r.pick) confirmRow(r) }
+function pickManual(r, id) { r.manual = id; r.confirmed = !!id; r.include = !!id && changesOf(r).length > 0 }
 
 // Excel 解析放在浏览器里（按需加载，不进主包）；日期按 yyyy-mm-dd 输出，数字按显示的写法
 async function onFile(f) {
@@ -149,27 +210,31 @@ async function readSheet() {
 async function run(body) {
   busy.value = true
   try {
-    result.value = await api.post('import/analyze', { ...body, year: Number(yearStr.value) })
-    mapping.value = (result.value.columns || []).map(c => c.field)
-    filter.value = result.value.summary.withChanges ? 'changes' : 'all'
-    await nextTick()
-    table.value?.clearSelection()
-    for (const r of result.value.rows) if (r.employee && !r.error && r.changes.length) table.value?.toggleRowSelection(r, true)
+    const res = await api.post('import/analyze', { ...body, year: Number(yearStr.value) })
+    for (const r of res.rows) {
+      Object.assign(r, { pick: r.candidates?.[0]?.employee.id ?? null, manual: null, confirmed: r.status === 'auto' })
+      r.include = r.status === 'auto' && r.changes.length > 0
+    }
+    result.value = reactive(res)
+    mapping.value = (res.columns || []).map(c => c.field)
+    filter.value = res.summary.toConfirm ? 'confirm' : res.summary.withChanges ? 'changes' : 'all'
   } finally { busy.value = false }
 }
 const analyzeFile = (m) => run({ rows: file.rows, ...(m ? { mapping: m } : {}) })
 const analyzeText = () => run({ text: text.value })
 
 async function apply() {
-  const n = sel.value.length
-  const fields = sel.value.reduce((s, r) => s + r.changes.length, 0)
+  const list = included.value
+  const n = list.length
+  const fields = list.reduce((s, r) => s + changesOf(r).length, 0)
   await ElMessageBox.confirm(`给 ${n} 人写入 ${fields} 项（档案、余额）？`, '确认导入', { type: 'warning' })
   saving.value = true
   try {
-    const items = sel.value.map(r => ({ userId: r.employee.id, changes: Object.fromEntries(r.changes.map(c => [c.field, c.to])) }))
+    // 名字不一样、人事确认了的：把表里的名字作为别名记下来
+    const items = list.map(r => ({ userId: targetOf(r), changes: Object.fromEntries(changesOf(r).map(c => [c.field, c.to])), ...(r.status !== 'auto' && r.who.name ? { alias: r.who.name } : {}) }))
     const r = await api.post('import/apply', { items, year: result.value.year })
     if (r.errors.length) ElMessageBox.alert(r.errors.join('\n'), `已导入 ${r.people} 人，有 ${r.errors.length} 项没导`, { type: 'warning' })
-    else ElMessage.success(`已导入 ${r.people} 人：档案 ${r.profileFields} 项、余额 ${r.balances} 项`)
+    else ElMessage.success(`已导入 ${r.people} 人：档案 ${r.profileFields} 项、余额 ${r.balances} 项${r.aliases ? `；记住了 ${r.aliases} 个别名` : ''}`)
     // 重新识别一遍，看剩下的
     if (mode.value === 'file' && file.rows.length) analyzeFile(result.value.columns ? mapping.value : undefined)
     else result.value = null
@@ -190,4 +255,6 @@ async function apply() {
 .to { color: var(--hr-primary); font-weight: 600; }
 .bad { color: var(--hr-danger); }
 .warn { color: var(--hr-warn); margin-top: 2px; }
+.pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+:deep(.dup-row) td { background: var(--el-color-danger-light-9) !important; }
 </style>

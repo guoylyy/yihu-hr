@@ -61,11 +61,16 @@ export async function saveAbsences(list) {
   let saved = 0
   for (const x of list) {
     const { vendorUserId, ...data } = x
-    data.typeCode = data.category === 'LEAVE' ? matchType(data.typeName, types) : null
     data.status = 'APPROVED'
     await prisma.$transaction(async (tx) => {
       // 扣余额和记录变化一起做，同一个人串行
       await tx.$queryRaw`SELECT id FROM Employee WHERE id = ${data.userId} FOR UPDATE`
+      // 这次没带类型（钉钉的批量接口不给，类型是之前逐条补查到的）：保留已有的
+      if (!data.typeName) {
+        const old = await tx.absence.findUnique({ where: { source_externalId: { source: data.source, externalId: data.externalId } }, select: { typeName: true } })
+        if (old?.typeName) data.typeName = old.typeName
+      }
+      data.typeCode = data.category === 'LEAVE' ? matchType(data.typeName, types) : null
       const a = await tx.absence.upsert({
         where: { source_externalId: { source: data.source, externalId: data.externalId } },
         create: data,

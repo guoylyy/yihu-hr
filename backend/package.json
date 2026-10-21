@@ -1,6 +1,6 @@
 {
   "name": "yihu-hr-backend",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
+    "pinyin-pro": "^3.29.5",
     "prisma": "^6.19.3"
   },
   "engines": {

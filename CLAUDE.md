@@ -32,5 +32,5 @@ cd frontend && npm run build                # 前端没有测试，至少确认�
 14. **敏感内容不出应用**：成本金额、1v1 纪要和私人备注、合同内容不放进 `audit` 的 `detail`（它会上报平台使用数据）；1v1 的私人备注只给记录人和人事
 15. 合同、成本、画像的规则（状态、法定试用期上限、竞业限制期、按标准生成成本、要留意的标记）是纯逻辑，放在 `lib/contracts.js`、`lib/cost.js`、`lib/portrait.js`，改了要补 `test/people.test.js`
 16. 合同文件放平台文件存储，key 固定是 `contracts/<userId>/…`（保存时校验），下载只走 `GET /api/contracts/:id/file`（检查权限后跳限时地址）
-17. **智能导入**：规则在 `lib/importer.js`（表头同义词、值的规范化、比对，改了补 `test/importer.test.js`），大模型只认规则认不出的（`services/importer.js`，走平台 `ws.llm`），模型的输出也要再过规则校验；一律先预览、确认后才写
+17. **智能导入**：规则在 `lib/importer.js`（表头同义词、值的规范化、比对，改了补 `test/importer.test.js`），对人在 `lib/nameMatch.js`（只有工号、完全相同、确认过的别名能直接认，其余一律要人事确认；改了补 `test/nameMatch.test.js`），大模型只认规则认不出的（`services/importer.js`，走平台 `ws.llm`），模型的输出也要再过规则校验；一律先预览、确认后才写
 18. **考勤 / 考核豁免**（`Employee.exemption`：ATTENDANCE 免考勤 / FULL 不参与考核）：判断只用 `lib/exemption.js` 的 `attendanceExempt` / `evaluationExempt`。新加的考勤统计要排除免考勤的人，新加的人员指标、成本统计要排除不参与考核的人；名单、档案、明细里照常显示（带标签）

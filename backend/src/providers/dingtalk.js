@@ -1,7 +1,11 @@
 // 钉钉考勤：打卡结果 POST /attendance/list（一次最多 50 人、7 天，分页 50 条）
-// 请假：POST /topapi/attendance/getleavestatus（一次最多 100 人，分页 20 条）—— 只给请假时段和时长，不给假期类型；出差、外出钉钉没有批量接口，不同步
+// 请假：POST /topapi/attendance/getleavestatus（一次最多 100 人，分页 20 条）—— 只给请假时段和时长，不给假期类型
+// 出差、外出、请假类型：钉钉没有批量接口，只有逐人逐天的 POST /topapi/attendance/getupdatedata（审批单 approve_list）。
+//   为了省调用量，只查「打卡记录上挂了审批实例（procInstId）、以前没查过」的那几天，和还不知道类型的请假的第一天；
+//   一次同步最多查 DING_DETAIL_MAX 次，没查完的下次接着查（查过的由调用方记在 SyncSeen）
 // 文档：https://open.dingtalk.com/document/orgapp/open-attendance-clock-in-data
 //       https://open.dingtalk.com/document/orgapp/query-status-of-leave
+//       https://open.dingtalk.com/document/orgapp/obtain-the-attendance-update-data
 import { callJson, tokenCache } from './http.js'
 import { platformAvailable, platformToken, resetPlatformToken } from './platformToken.js'
 import { addDays, dayInTz, zonedTime } from '../lib/dates.js'
@@ -40,6 +44,44 @@ export function normalize(r, tz) {
     note: r.sourceType && r.sourceType !== 'ATM' && r.sourceType !== 'DING_ATM' ? `来源：${r.sourceType}` : null,
     raw: r
   }
+}
+
+const DETAIL_MAX = Number(process.env.DING_DETAIL_MAX) || 150
+const TAG = { 请假: 'LEAVE', 出差: 'TRIP', 外出: 'OUT' }
+const parseTime = (t, tz) => {
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(String(t || ''))
+  return m ? zonedTime(m[1], m[2], tz) : null
+}
+
+/**
+ * getupdatedata 的审批单 → { trips: 出差 / 外出的统一记录, leaveTypes: [{ start, end, typeName }] }
+ * 请假本身已经由 getleavestatus 拉到（带时长），这里只拿它的类型去补
+ */
+export function normalizeApproveList(userid, list, tz) {
+  const trips = [], leaveTypes = []
+  for (const a of list || []) {
+    const category = TAG[a.tag_name] || (Number(a.biz_type) === 3 ? 'LEAVE' : null)
+    const startAt = parseTime(a.begin_time, tz), endAt = parseTime(a.end_time, tz)
+    if (!category || !startAt || !endAt) continue
+    if (category === 'LEAVE') { if (a.sub_type) leaveTypes.push({ start: startAt.getTime(), end: endAt.getTime(), typeName: a.sub_type }); continue }
+    const n = Number(a.duration)
+    const unit = String(a.duration_unit || '').toUpperCase()
+    trips.push({
+      source: 'DINGTALK',
+      externalId: `appr:${a.procInst_id || `${userid}:${startAt.getTime()}`}`,
+      vendorUserId: userid,
+      category,
+      typeName: category === 'TRIP' ? '出差' : a.sub_type || '外出',
+      startAt, endAt,
+      startDate: dayInTz(startAt, tz),
+      endDate: dayInTz(new Date(Math.max(startAt.getTime(), endAt.getTime() - 1)), tz),
+      days: n > 0 && unit.includes('DAY') ? (unit.includes('HALF') ? n / 2 : n) : null,
+      hours: n > 0 && unit.includes('HOUR') ? n : null,
+      approvalId: a.procInst_id || null,
+      raw: { ...a }
+    })
+  }
+  return { trips, leaveTypes }
 }
 
 /** 钉钉一条请假状态 → 统一形状的假勤记录 */
@@ -90,10 +132,16 @@ export default {
     }
     return out
   },
+  absenceCovers: '请假（时段、时长；类型逐条补查）、出差、外出（按打卡记录上挂的审批逐条补查）',
+  absenceHint: '要在钉钉开发者后台给这个应用开通考勤的「查询请假状态」和「获取考勤更新数据」（getupdatedata）接口权限',
   absenceBatchUsers: 100,
   absenceMaxDays: 30,
-  /** 请假（钉钉只有请假的批量接口）。ids：钉钉 userId（≤100） */
-  async fetchAbsences(ids, from, to, tz) {
+  /**
+   * 请假（批量）+ 出差、外出、请假类型（按需逐天补查）。ids：钉钉 userId（≤100）
+   * opts.hints：[{ userid, day, key }] 打卡记录上挂了审批的日子（key = 审批实例 id）
+   * opts.known(key)：查过的不再查；返回的 checked 是这次查过的 key，调用方记下来
+   */
+  async fetchAbsences(ids, from, to, tz, { hints = [], known = () => false } = {}) {
     const out = []
     const start = zonedTime(from, '00:00', tz).getTime()
     const end = zonedTime(addDays(to, 1), '00:00', tz).getTime() - 1
@@ -106,7 +154,35 @@ export default {
       for (const r of j.result?.leave_status || []) out.push(normalizeLeave(r, tz))
       if (!j.result?.has_more || offset > 5000) break
     }
-    return out
+    // 逐天补查：挂了审批的打卡日 + 还不知道类型的请假的第一天
+    const mine = new Set(ids)
+    const todo = new Map()
+    const want = (userid, day, key) => todo.set(`${userid}|${day}`, (todo.get(`${userid}|${day}`) || new Set()).add(key))
+    for (const h of hints) if (mine.has(h.userid) && h.day >= from && h.day <= to && !known(h.key)) want(h.userid, h.day, h.key)
+    for (const l of out) if (!l.typeName && !known(l.externalId)) want(l.vendorUserId, l.startDate, l.externalId)
+    const checked = []
+    const trips = new Map()
+    let calls = 0
+    for (const [k, keys] of todo) {
+      if (calls++ >= DETAIL_MAX) break
+      const [userid, day] = k.split('|')
+      const j = await callJson('钉钉', `${API}/topapi/attendance/getupdatedata?access_token=${await token()}`, { method: 'POST', body: { userid, work_date: `${day} 00:00:00` } })
+      if (j.errcode === 40014 || j.errcode === 42001) token.reset()
+      if (j.errcode !== 0) throw new Error(`钉钉考勤详情接口出错（${j.errcode}）：${j.errmsg}`)
+      const r = normalizeApproveList(userid, j.result?.approve_list, tz)
+      for (const t of r.trips) trips.set(t.externalId, t)
+      for (const lt of r.leaveTypes) {
+        const hit = out.find(l => l.vendorUserId === userid && Math.abs(l.startAt.getTime() - lt.start) < 120_000 && Math.abs(l.endAt.getTime() - lt.end) < 120_000)
+        if (hit) hit.typeName = lt.typeName
+      }
+      checked.push(...keys)
+    }
+    const list = [...out, ...trips.values()]
+    list.checked = checked
+    list.pending = Math.max(0, todo.size - DETAIL_MAX)
+    return list
   },
+  /** 打卡记录上挂了审批实例的（出差、外出、请假时钉钉会挂上）→ 逐天补查的线索 */
+  approvalHint: (p) => (p.raw?.procInstId ? { userid: p.vendorUserId, day: p.workDate, key: `proc:${p.raw.procInstId}` } : null),
   _token: token
 }

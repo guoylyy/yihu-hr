@@ -143,6 +143,8 @@ export default {
     }
     return out
   },
+  absenceCovers: '请假（含类型）、出差、外出',
+  absenceHint: '要在飞书开发者后台给这个应用开通「获取审批通过数据」（attendance/v1/user_approvals/query）接口要的考勤权限，并发布新版本',
   absenceBatchUsers: 50,
   absenceMaxDays: 30,
   /** 已通过的请假、出差、外出。ids 同 fetch */

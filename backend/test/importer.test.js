@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PROFILE_FIELDS, balanceFields, diffRecord, guessMapping, matchEmployee, normalizeValue, parseDate, parseEducation, parseEmployment, parseYears, yearsAgo } from '../src/lib/importer.js'
+import { PROFILE_FIELDS, balanceFields, diffRecord, guessMapping, normalizeValue, parseDate, parseEducation, parseEmployment, parseYears, yearsAgo } from '../src/lib/importer.js'
 
 const FIELDS = [...PROFILE_FIELDS, ...balanceFields([{ code: 'ANNUAL', name: '年假', balanced: true }, { code: 'COMP', name: '调休', balanced: true }, { code: 'SICK', name: '病假', balanced: false }])]
 const f = (k) => FIELDS.find(x => x.key === k)
@@ -36,14 +36,6 @@ test('规范值：空的跳过，看不懂的报出来，余额取到半天', ()
   assert.deepEqual(normalizeValue(f('gender'), '女'), { value: 'F' })
   assert.deepEqual(normalizeValue(f('balance:ANNUAL'), '5.3 天'), { value: 5.5 })
   assert.deepEqual(normalizeValue(f('tags'), 'Java、带团队, 英语'), { value: ['Java', '带团队', '英语'] })
-})
-
-test('对人：工号优先，重名要工号', () => {
-  const emps = [{ id: 1, name: '张三', jobNumber: 'E01' }, { id: 2, name: '张三', jobNumber: 'E02' }, { id: 3, name: '李四', jobNumber: null }]
-  assert.equal(matchEmployee({ name: '张三', jobNumber: 'E02' }, emps).employee.id, 2)
-  assert.match(matchEmployee({ name: '张三' }, emps).error, /2 个/)
-  assert.equal(matchEmployee({ name: '李四' }, emps).employee.id, 3)
-  assert.match(matchEmployee({ name: '王五' }, emps).error, /找不到/)
 })
 
 test('比出要改的：一样的不改，工龄只在没给参加工作日期时推算', () => {

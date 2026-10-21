@@ -104,6 +104,7 @@ const TOOLS = [
   {
     name: 'import_employee_data',
     description: '人事用：把对话里给的员工信息写进档案或假期余额（比如「张三 2021-03-01 入职，本科，复旦；李四年假还剩 5 天」）。先整理成 records 调一次 preview=true 给用户看要改什么，用户确认后再 preview=false 写入。' +
+      '名字和平台上不完全一样的（称呼、昵称、带备注、拼音）不会自动写，返回 needConfirm 候选：问用户是哪一位，再把那条带上 userId 重新调。' +
       '姓名、工号只用来对人（以平台为准，不改）。values 的 key：hireDate 入职日期、workStartDate 参加工作日期、regularDate 转正日期、leaveDate 离职日期、birthDate 出生日期（都写 YYYY-MM-DD）、gender（M / F）、education（高中及以下 / 大专 / 本科 / 硕士 / 博士）、school 毕业院校、major 专业、level 职级、' +
       'employmentType（FULL_TIME 全职 / INTERN 实习 / PART_TIME 兼职 / OUTSOURCED 外包 / REHIRED 退休返聘）、tags 标签数组、' +
       'exemption 考勤 / 考核豁免（ATTENDANCE 免考勤：不进考勤统计，人员指标和成本照算；FULL 免考勤且不参与考核：如董事，考勤、人员全景指标、成本统计都不算；NONE 恢复正常）、exemptNote 豁免原因、workYears 工龄（年，推算参加工作日期）、tenureYears 司龄（年，推算入职日期）、balance:ANNUAL 年假剩余天数、balance:COMP 调休剩余天数（其他扣余额的假用 balance:<类型代码>，先用 list_leave_types 查）',

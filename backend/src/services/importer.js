@@ -2,14 +2,17 @@
 //   - 表格：规则先对表头（lib/importer.js），对不上的列交给平台大模型认；值先按规则规范，规则解析不了的再让模型规范
 //   - 一段话（「张三 2021 年 3 月入职，本科；李四年假还剩 5 天」）或粘贴的表格：让模型抽成一条条记录，再走同样的规范化
 //   - 能导：档案（入职 / 参加工作 / 转正 / 离职 / 出生日期、性别、学历、院校、专业、职级、用工类型、标签、工龄 / 司龄推算）和假期余额（设为某个数）
-//   - 姓名、部门、工号以平台为准，只用来对人，不改
+//   - 姓名、部门、工号以平台为准，只用来对人，不改。对人：工号 / 完全相同 / 确认过的别名直接认；
+//     名字不完全一样的（括号备注、部门前缀、「郭老师」、拼音、同音字……）给候选，人事确认后才导，确认过的记成别名下次直接认（lib/nameMatch.js）；
+//     规则一个候选都给不出的，再把名字交给模型从花名册里猜（也要确认）
 // 大模型是平台托管的（应用拿不到密钥）；没接入平台时只用规则。发给模型的是表头和要认的值，确认前什么都不写
 import { prisma } from '../lib/prisma.js'
 import { badRequest } from '../lib/http.js'
 import { ws } from '../lib/platform.js'
 import { currentYear } from '../lib/dates.js'
 import { EXEMPTIONS } from '../lib/exemption.js'
-import { EDUCATION_LEVELS, EMPLOYMENT_CODES, PROFILE_FIELDS, balanceFields, diffRecord, guessMapping, matchEmployee, normalizeValue } from '../lib/importer.js'
+import { EDUCATION_LEVELS, EMPLOYMENT_CODES, PROFILE_FIELDS, balanceFields, diffRecord, guessMapping, normalizeValue } from '../lib/importer.js'
+import { matchPerson } from '../lib/nameMatch.js'
 import { requireHr } from './access.js'
 import { audit } from './audit.js'
 import { employeeBrief } from './directory.js'
@@ -72,6 +75,14 @@ async function aiNormalize(unparsedByField, fields, today) {
     out.set(key, new Map(Object.entries(j.values || {})))
   }
   return out
+}
+
+/** 规则对不上的名字：把花名册（id、姓名、部门）给模型猜，返回 Map(原名 -> [id]) */
+async function aiMatchNames(names, emps) {
+  const roster = emps.filter(e => e.active).slice(0, 1500).map(e => `${e.id}\t${e.name}\t${e.deptPath || ''}`).join('\n')
+  const j = await askJson(SYSTEM, `导入员工资料时，这些名字在花名册里对不上：${JSON.stringify(names)}\n它们可能是昵称、称呼（郭老师、小王）、英文名、拼音、错别字或带了备注。从下面的花名册（id、姓名、部门）里给每个名字找最可能的人，最多 3 个，确实找不到给空数组。\n输出：{"matches":{"原名":[id, ...]}}\n\n花名册：\n${roster}`)
+  const ids = new Set(emps.map(e => e.id))
+  return new Map(Object.entries(j.matches || {}).map(([k, v]) => [k, (Array.isArray(v) ? v : []).map(Number).filter(id => ids.has(id)).slice(0, 3)]))
 }
 
 /** 一段话 / 粘贴的表格 → 记录 [{ name, jobNumber, values: { field: 值 } }] */
@@ -191,14 +202,12 @@ export async function analyze(ctx, body = {}) {
   // 规则先规范一遍，解析不了的值交给模型
   const emps = await prisma.employee.findMany()
   const cur = await currentValues(emps, fields, year)
-  const pass = (recs) => recs.map(rec => {
-    const m = matchEmployee(rec, emps)
-    const d = diffRecord(rec.values, m.employee ? cur(m.employee) : {}, fields, { today })
-    return { rec, m, d }
-  })
-  let out = pass(records)
+  const aliases = new Map((await prisma.nameAlias.findMany()).map(a => [a.alias, a.userId]))
+  const matches = records.map(rec => matchPerson(rec, emps, { aliases }))
   const unparsed = new Map()
-  for (const o of out) for (const u of o.d.unparsed) unparsed.set(u.field, (unparsed.get(u.field) || new Set()).add(String(o.rec.values[u.field]).trim()))
+  for (const rec of records) {
+    for (const u of diffRecord(rec.values, {}, fields, { today }).unparsed) unparsed.set(u.field, (unparsed.get(u.field) || new Set()).add(String(rec.values[u.field]).trim()))
+  }
   if (unparsed.size) {
     const fixed = await tryAi(() => aiNormalize(unparsed, fields, today), null)
     if (fixed) {
@@ -208,47 +217,79 @@ export async function analyze(ctx, body = {}) {
           if (hit != null && hit !== 'null') rec.values[k] = hit
         }
       }
-      out = pass(records)
+    }
+  }
+  // 规则一个候选都没有的名字：交给模型从花名册里猜（猜出来的也要确认）
+  const lost = [...new Set(records.filter((r, i) => matches[i].status === 'none' && r.name).map(r => r.name))]
+  if (lost.length && lost.length <= 80) {
+    const guess = await tryAi(() => aiMatchNames(lost, emps), null)
+    if (guess) {
+      records.forEach((r, i) => {
+        const ids = guess.get(r.name) || []
+        if (matches[i].status === 'none' && ids.length) matches[i] = { status: 'confirm', candidates: ids.map(id => ({ employee: emps.find(e => e.id === id), score: 50, reason: '模型猜的' })) }
+      })
     }
   }
 
   const byKey = new Map(fields.map(f => [f.key, f]))
-  const rows = out.map(({ rec, m, d }) => ({
-    row: rec.row, who: { name: rec.name, jobNumber: rec.jobNumber },
-    employee: m.employee ? employeeBrief(m.employee) : null, error: m.error || null,
-    changes: d.changes.map(c => ({ ...c, fromText: fmtValue(byKey.get(c.field), c.from), toText: fmtValue(byKey.get(c.field), c.to) })),
-    unparsed: d.unparsed
-  }))
-  // 同一个人出现两次：只认第一行
+  const view = (list) => list.map(c => ({ ...c, fromText: fmtValue(byKey.get(c.field), c.from), toText: fmtValue(byKey.get(c.field), c.to) }))
+  const rows = records.map((rec, i) => {
+    const m = matches[i]
+    const d = (e) => diffRecord(rec.values, cur(e), fields, { today })
+    const base = { row: rec.row, who: { name: rec.name, jobNumber: rec.jobNumber }, status: m.status, unparsed: diffRecord(rec.values, {}, fields, { today }).unparsed }
+    // 不管对到谁都要写的值（人事手工指定别人时用）
+    base.proposed = view(diffRecord(rec.values, {}, fields, { today }).changes)
+    if (m.status === 'auto') return { ...base, employee: employeeBrief(m.employee), method: m.method, changes: view(d(m.employee).changes) }
+    if (m.status === 'confirm') return { ...base, employee: null, changes: [], candidates: m.candidates.map(c => ({ employee: employeeBrief(c.employee), score: c.score, reason: c.reason, changes: view(d(c.employee).changes) })) }
+    return { ...base, employee: null, changes: [], error: m.error }
+  })
+  // 同一个人直接认出来两次：只认第一行
   const seen = new Set()
   for (const r of rows) {
-    if (!r.employee) continue
-    if (seen.has(r.employee.id)) { r.error = '表里前面已经有这个人了，这一行不导'; r.changes = [] }
+    if (r.status !== 'auto') continue
+    if (seen.has(r.employee.id)) Object.assign(r, { status: 'dup', error: '表里前面已经有这个人了，这一行不导', changes: [] })
     seen.add(r.employee.id)
   }
   return {
     year, ai, columns,
     fields: fields.map(f => ({ key: f.key, label: f.label })),
     rows,
-    summary: { rows: rows.length, matched: rows.filter(r => r.employee && !r.error).length, withChanges: rows.filter(r => r.employee && !r.error && r.changes.length).length, unmatched: rows.filter(r => r.error).length }
+    summary: {
+      rows: rows.length, matched: rows.filter(r => r.status === 'auto').length, toConfirm: rows.filter(r => r.status === 'confirm').length,
+      withChanges: rows.filter(r => r.status === 'auto' && r.changes.length).length, unmatched: rows.filter(r => r.status === 'none' || r.status === 'dup').length
+    }
   }
 }
 
-/** 确认导入：items = [{ userId, changes: { field: 规范后的值 } }]，值再校验一遍 */
+/**
+ * 确认导入：items = [{ userId, changes: { field: 规范后的值 }, alias? }]，值再校验一遍。
+ * alias：表里写的名字（和平台上不一样、人事确认了是这个人），记下来下次直接认
+ */
 export async function apply(ctx, { items = [], year } = {}) {
   await requireHr(ctx)
   const s = await getSettings()
   const y = Number(year) || currentYear(s.timezone)
   if (!Array.isArray(items) || !items.length) throw badRequest('没有要导入的')
   if (items.length > MAX_ROWS) throw badRequest(`一次最多导 ${MAX_ROWS} 人`)
+  const dupIds = items.map(it => Number(it.userId)).filter((id, i, a) => a.indexOf(id) !== i)
+  if (dupIds.length) {
+    const names = (await prisma.employee.findMany({ where: { id: { in: dupIds } } })).map(e => e.name)
+    throw badRequest(`同一个人选了两行：${[...new Set(names)].join('、')}，请只留一行`)
+  }
   const fields = await allFields()
   const byKey = new Map(fields.map(f => [f.key, f]))
   const today = await todayStr()
   const errors = []
+  let aliases = 0
   let people = 0, profileFields = 0, balances = 0
   for (const it of items) {
     const emp = await prisma.employee.findUnique({ where: { id: Number(it.userId) } })
     if (!emp) { errors.push(`没有员工 ${it.userId}`); continue }
+    const alias = String(it.alias || '').trim().slice(0, 50)
+    if (alias && alias !== emp.name) {
+      await prisma.nameAlias.upsert({ where: { alias }, create: { alias, userId: emp.id, createdBy: ctx.user.id }, update: { userId: emp.id, createdBy: ctx.user.id } })
+      aliases++
+    }
     const data = {}
     const bal = []
     for (const [k, v] of Object.entries(it.changes || {})) {
@@ -267,8 +308,8 @@ export async function apply(ctx, { items = [], year } = {}) {
     balances += bal.length
   }
   // 留痕只记数量（不记具体的人事信息）
-  audit(ctx, 'people.import', { entityType: 'employee', detail: { people, profileFields, balances, year: y } })
-  return { people, profileFields, balances, errors: errors.slice(0, 50) }
+  audit(ctx, 'people.import', { entityType: 'employee', detail: { people, profileFields, balances, aliases, year: y } })
+  return { people, profileFields, balances, aliases, errors: errors.slice(0, 50) }
 }
 
 /**
@@ -283,15 +324,24 @@ export async function importRecords(ctx, { records = [], year, preview = false }
   const fields = await allFields()
   const emps = await prisma.employee.findMany()
   const cur = await currentValues(emps, fields, y)
+  const aliases = new Map((await prisma.nameAlias.findMany()).map(a => [a.alias, a.userId]))
   const rows = records.slice(0, 500).map(rec => {
-    const m = rec.userId ? { employee: emps.find(e => e.id === Number(rec.userId)) || null, error: emps.some(e => e.id === Number(rec.userId)) ? null : `没有员工 ${rec.userId}` } : matchEmployee(rec, emps)
-    const d = m.employee ? diffRecord(rec.values || {}, cur(m.employee), fields, { today }) : { changes: [], unparsed: [] }
-    return { who: rec.name || rec.jobNumber || rec.userId, employee: m.employee ? employeeBrief(m.employee) : null, error: m.error || null, changes: d.changes, unparsed: d.unparsed }
+    const m = rec.userId
+      ? (emps.some(e => e.id === Number(rec.userId)) ? { status: 'auto', employee: emps.find(e => e.id === Number(rec.userId)) } : { status: 'none', error: `没有员工 ${rec.userId}` })
+      : matchPerson(rec, emps, { aliases })
+    const d = m.status === 'auto' ? diffRecord(rec.values || {}, cur(m.employee), fields, { today }) : { changes: [], unparsed: [] }
+    return { who: rec.name || rec.jobNumber || rec.userId, employee: m.status === 'auto' ? employeeBrief(m.employee) : null, error: m.error || null, candidates: m.candidates, changes: d.changes, unparsed: d.unparsed }
   })
-  if (preview) return { year: y, rows }
+  const out = (r) => ({
+    who: r.who, matched: r.employee?.name || null, error: r.error,
+    // 名字对不准：列出候选，问用户是哪位，再带上 userId 调一次
+    needConfirm: r.candidates ? r.candidates.map(c => ({ userId: c.employee.id, name: c.employee.name, dept: c.employee.deptPath, reason: c.reason })) : undefined,
+    changes: r.changes.map(c => `${c.label}：${c.from ?? '空'} → ${c.to}`), unparsed: r.unparsed.map(u => `${u.label}「${u.raw}」看不懂`)
+  })
+  if (preview) return { year: y, rows: rows.map(out) }
   const items = rows.filter(r => r.employee && r.changes.length).map(r => ({ userId: r.employee.id, changes: Object.fromEntries(r.changes.map(c => [c.field, c.to])) }))
   const result = items.length ? await apply(ctx, { items, year: y }) : { people: 0, profileFields: 0, balances: 0, errors: [] }
-  return { year: y, ...result, rows: rows.map(r => ({ who: r.who, matched: r.employee?.name || null, error: r.error, changes: r.changes.map(c => `${c.label}：${c.from ?? '空'} → ${c.to}`), unparsed: r.unparsed.map(u => `${u.label}「${u.raw}」看不懂`) })) }
+  return { year: y, ...result, rows: rows.map(out) }
 }
 
 export const IMPORT_FIELDS_DOC = async () => fieldDoc((await allFields()).filter(f => f.kind !== 'who'))

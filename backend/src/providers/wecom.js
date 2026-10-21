@@ -89,6 +89,8 @@ export default {
     if (j.errcode !== 0) throw new Error(`企业微信打卡接口出错（${j.errcode}）：${j.errmsg}`)
     return (j.checkindata || []).map(r => normalize(r, tz))
   },
+  absenceCovers: '请假（含类型）、出差、外出（打卡日报里的假勤统计，按天）',
+  absenceHint: '用的是「打卡」应用的 Secret，和打卡同一个；报错时看打卡应用的 API 可见范围是不是全员',
   absenceBatchUsers: 100,
   absenceMaxDays: 30,
   async fetchAbsences(ids, from, to, tz) {
