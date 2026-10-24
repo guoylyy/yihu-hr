@@ -17,6 +17,7 @@ import * as oneOnOne from '../services/oneOnOne.js'
 import * as absences from '../services/absences.js'
 import * as importer from '../services/importer.js'
 import * as profileSync from '../services/profileSync.js'
+import * as advisor from '../services/advisor.js'
 import { contractScope, costScope } from '../services/access.js'
 import { VERSION } from '../lib/version.js'
 
@@ -117,6 +118,9 @@ r.post('/one-on-ones/upload-token', wrap(req => oneOnOne.uploadToken(req.ctx, re
 r.post('/one-on-ones/parse', wrap(req => oneOnOne.parseMinutes(req.ctx, req.body)))
 r.get('/one-on-ones/:id/source', wrap(req => oneOnOne.sourceOf(req.ctx, id(req))))
 r.get('/one-on-ones/:id/file', wrap(async (req, res) => res.redirect(302, await oneOnOne.sourceFileUrl(req.ctx, id(req)))))
+
+// 分析建议助手（人事、负责人）
+r.post('/advisor/ask', wrap(req => advisor.ask(req.ctx, req.body)))
 
 // 设置
 r.get('/settings', wrap(req => settings.listSettings(req.ctx)))

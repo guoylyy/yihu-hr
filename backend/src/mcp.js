@@ -17,6 +17,7 @@ import * as people from './services/people.js'
 import * as oneOnOne from './services/oneOnOne.js'
 import { contractScope } from './services/access.js'
 import { VERSION } from './lib/version.js'
+import { byDept, monthsBack, sumDepts, topAbnormal } from './lib/advisor.js'
 
 const RO = { readOnlyHint: true }
 
@@ -32,7 +33,7 @@ async function findPerson(ctx, { userId, name }) {
 }
 const obj = (properties = {}, required = []) => ({ type: 'object', properties, required })
 
-const TOOLS = [
+export const TOOLS = [
   {
     name: 'get_my_attendance',
     description: '查我（或我能看的同事）某个月的考勤：每天的上下班打卡时间、迟到早退缺卡、请假、出差、外出。用户问「我这个月考勤」「我有没有迟到」「上个月缺卡几次」时用',
@@ -69,6 +70,32 @@ const TOOLS = [
         month: r.month, totals: r.totals,
         people: r.rows.slice(0, 200).map(x => ({ name: x.employee.name, dept: x.employee.deptPath, normal: x.normal, late: x.late, early: x.early, missing: x.missing, absent: x.absent, noData: x.noData, leaveDays: x.leaveDays, leaveByType: x.leaveByType, tripDays: x.tripDays })),
         url: appUrl(`/team?month=${r.month}`)
+      }
+    }
+  },
+  {
+    name: 'get_attendance_trend',
+    description: '部门负责人 / 人事看考勤趋势：最近几个月每月的出勤率、迟到早退缺卡旷工、请假出差天数，按部门拆开，以及这几个月异常最多的人。用户问「最近考勤有没有变差」「哪个部门迟到多」「出勤趋势」「给点考勤上的建议」时用',
+    inputSchema: obj({
+      months: { type: 'number', description: '看几个月（含本月），默认 6，最多 12' },
+      endMonth: { type: 'string', description: '截止月份 YYYY-MM，默认本月' },
+      keyword: { type: 'string', description: '按部门 / 姓名 / 工号筛' }
+    }),
+    annotations: RO,
+    run: async (ctx, a) => {
+      if (!(await canSeeTeam(ctx))) throw Object.assign(new Error('只有部门负责人和人事能看团队考勤'), { status: 403 })
+      const n = Math.min(Math.max(Math.round(Number(a.months) || 6), 1), 12)
+      if (a.endMonth && !/^\d{4}-\d{2}$/.test(a.endMonth)) throw Object.assign(new Error('截止月份格式是 YYYY-MM'), { status: 400 })
+      const end = a.endMonth || (await contracts.today()).slice(0, 7)
+      const months = []
+      for (const month of monthsBack(end, n)) months.push({ month, rows: (await attendance.monthlyReport(ctx, { month, keyword: a.keyword })).rows })
+      const reports = months.map(({ month, rows }) => ({ month, byDept: byDept(rows) }))
+      return {
+        months: reports.map(({ month, byDept: ds }) => ({ month, ...sumDepts(ds) })),
+        byDept: reports,
+        topAbnormal: topAbnormal(months),
+        note: '免考勤的人不算；本月只算到今天；「无记录」多说明没排班或没同步到，不一定是旷工',
+        url: appUrl('/team')
       }
     }
   },

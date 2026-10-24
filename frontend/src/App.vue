@@ -38,7 +38,7 @@ import { me } from './me.js'
 const drawer = ref(false)
 const items = computed(() => [
   // 人员全景放最上面（人事和负责人登录后默认也进这里）
-  ...(me.team ? [{ to: '/people', label: '人员全景' }] : []),
+  ...(me.team ? [{ to: '/people', label: '人员全景' }, { to: '/advisor', label: '分析建议' }] : []),
   { group: '考勤' },
   { to: '/my', label: '我的考勤' },
   { to: '/leave', label: '我的假期' },

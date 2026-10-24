@@ -35,3 +35,4 @@ cd frontend && npm run build                # 前端没有测试，至少确认�
 17. **智能导入**：规则在 `lib/importer.js`（表头同义词、值的规范化、比对，改了补 `test/importer.test.js`），对人在 `lib/nameMatch.js`（只有工号、完全相同、确认过的别名能直接认，其余一律要人事确认；改了补 `test/nameMatch.test.js`），大模型只认规则认不出的（`services/importer.js`，走平台 `ws.llm`），模型的输出也要再过规则校验；一律先预览、确认后才写
 18. **考勤 / 考核豁免**（`Employee.exemption`：ATTENDANCE 免考勤 / FULL 不参与考核）：判断只用 `lib/exemption.js` 的 `attendanceExempt` / `evaluationExempt`。新加的考勤统计要排除免考勤的人，新加的人员指标、成本统计要排除不参与考核的人；名单、档案、明细里照常显示（带标签）
 19. **从钉钉 / 飞书补全档案**（`services/profileSync.js`）：只读不写回；三方比对的规则在 `lib/vendorProfile.js`（改了补 `test/vendorProfile.test.js`），不要直接覆盖这里的值；平台给的字段（姓名、部门、平台上有的工号）仍以平台为准
+20. **分析建议助手**（`services/advisor.js`，规则在 `lib/advisor.js`）：直接用 `mcp.js` 的 `TOOLS` 里只读的那些，不另写查询、不另判权限；要让它看到新数据（比如以后的 OKR），就加一个标 `readOnlyHint` 的工具。对话不落库，留痕不记问答原文

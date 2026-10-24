@@ -11,6 +11,7 @@ const routes = [
   { path: '/approvals', redirect: '/leave' },
   { path: '/report', redirect: '/team' },
   { path: '/people', component: () => import('./views/People.vue'), meta: { title: '人员全景', need: 'team' } },
+  { path: '/advisor', component: () => import('./views/Advisor.vue'), meta: { title: '分析建议', need: 'team' } },
   { path: '/people/:id', component: () => import('./views/Person.vue'), meta: { title: '人员画像' } },
   { path: '/contracts', component: () => import('./views/Contracts.vue'), meta: { title: '合同', need: 'contracts' } },
   { path: '/costs', component: () => import('./views/Costs.vue'), meta: { title: '人员成本', need: 'cost' } },
