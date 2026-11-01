@@ -1,7 +1,11 @@
 <template>
   <div class="shell">
     <header class="top">
-      <div class="brand">人事考勤</div>
+      <div class="brand">
+        <!-- 以虎官方图标 hr（yihu-brand），强调色固定不跟主题 -->
+        <svg class="brand-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.75 7.125a3.25 3.25 0 1 0 6.5 0a3.25 3.25 0 1 0 -6.5 0Z"/><path d="M4.5 20.125a7.5 6.375 0 0 1 15 0M4 20.125h16"/><path d="M10.75 7.125a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z" fill="#d2521e" stroke="none"/></svg>
+        人事考勤
+      </div>
       <div class="right">
         <span v-if="me.version && !isMobile" class="ver" title="人事考勤的版本，更新说明见 CHANGELOG">v{{ me.version }}</span>
         <button v-if="isMobile" class="avatar-btn" aria-label="菜单" @click="drawer = true"><el-avatar :size="32" :src="me.user?.avatar || undefined">{{ initial }}</el-avatar></button>
@@ -73,7 +77,8 @@ const items = computed(() => [
 <style scoped>
 .shell { display: flex; flex-direction: column; min-height: 100vh; }
 .top { height: calc(var(--yh-header-h) + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 20px 0; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--hr-surface); border-bottom: 1px solid var(--hr-border); position: sticky; top: 0; z-index: 10; }
-.brand { font-weight: 600; font-size: 16px; color: var(--hr-text); white-space: nowrap; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; color: var(--hr-text); white-space: nowrap; }
+.brand-icon { flex: none; }
 .right { display: flex; align-items: center; gap: 12px; flex: none; }
 .ver { font-size: 12px; color: var(--hr-muted); font-family: var(--yh-font-num); font-variant-numeric: tabular-nums; }
 .avatar-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 50%; }
