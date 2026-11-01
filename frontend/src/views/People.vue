@@ -38,16 +38,16 @@
         <div class="card">
           <h3>按部门</h3>
           <div class="table-wrap">
-            <el-table :data="data.byDept" size="small" @row-click="(r) => { q.dept = r.dept; load() }">
+            <el-table v-card-list :data="data.byDept" size="small" @row-click="(r) => { q.dept = r.dept; load() }">
               <el-table-column label="部门" prop="dept" min-width="150" />
               <el-table-column label="人数" prop="headcount" width="60" align="right" />
-              <el-table-column label="平均司龄" width="80" align="right"><template #default="{ row }">{{ row.avgTenure ?? '—' }}</template></el-table-column>
+              <el-table-column label="平均司龄" width="80" align="right"><template v-slot="{ row }">{{ row.avgTenure ?? '—' }}</template></el-table-column>
               <el-table-column label="风险 / 提醒" width="90" align="center">
-                <template #default="{ row }"><span :class="{ bad: row.risk }">{{ row.risk }}</span> / <span :class="{ warnc: row.warn }">{{ row.warn }}</span></template>
+                <template v-slot="{ row }"><span :class="{ bad: row.risk }">{{ row.risk }}</span> / <span :class="{ warnc: row.warn }">{{ row.warn }}</span></template>
               </el-table-column>
-              <el-table-column label="1v1 覆盖" width="80" align="right"><template #default="{ row }">{{ row.oneOnOneCoverage }}%</template></el-table-column>
-              <el-table-column v-if="data.seeCost" label="今年成本" width="100" align="right"><template #default="{ row }">{{ wan(row.costYtd) }}</template></el-table-column>
-              <el-table-column v-if="data.seeCost" label="人均" width="90" align="right"><template #default="{ row }">{{ wan(row.costPerHead) }}</template></el-table-column>
+              <el-table-column label="1v1 覆盖" width="80" align="right"><template v-slot="{ row }">{{ row.oneOnOneCoverage }}%</template></el-table-column>
+              <el-table-column v-if="data.seeCost" label="今年成本" width="100" align="right"><template v-slot="{ row }">{{ wan(row.costYtd) }}</template></el-table-column>
+              <el-table-column v-if="data.seeCost" label="人均" width="90" align="right"><template v-slot="{ row }">{{ wan(row.costPerHead) }}</template></el-table-column>
             </el-table>
           </div>
         </div>
@@ -69,21 +69,21 @@
         <div class="toolbar" style="justify-content: space-between; margin-bottom: 8px">
           <div v-if="data.isHr && sel.length" class="toolbar">
             <span class="small muted">选了 {{ sel.length }} 人</span>
-            <el-button size="small" type="primary" @click="openExempt">设考勤 / 考核…</el-button>
+            <el-button type="primary" @click="openExempt">设考勤 / 考核…</el-button>
           </div>
           <h3 style="margin: 0">人员（{{ data.people.length }}）<span v-if="q.dept" class="muted small"> · {{ q.dept }} <span class="link" @click="q.dept = ''; load()">清除</span></span><span v-if="q.flag" class="muted small"> · {{ PEOPLE_FLAGS[q.flag] }}</span></h3>
         </div>
         <div class="table-wrap">
-          <el-table :data="data.people" size="small" row-key="employee.id" @row-click="(r, col) => col?.type !== 'selection' && router.push(`/people/${r.employee.id}`)" @selection-change="sel = $event" row-class-name="clickable">
+          <el-table v-card-list :data="data.people" size="small" row-key="employee.id" @row-click="(r, col) => col?.type !== 'selection' && router.push(`/people/${r.employee.id}`)" @selection-change="sel = $event" row-class-name="clickable">
             <el-table-column v-if="data.isHr" type="selection" width="36" fixed />
-            <el-table-column label="姓名" min-width="110" fixed><template #default="{ row }"><b>{{ row.employee.name }}</b><ExemptTag :value="row.exemption" :note="row.exemptNote" /></template></el-table-column>
+            <el-table-column label="姓名" min-width="110" fixed><template v-slot="{ row }"><b>{{ row.employee.name }}</b><ExemptTag :value="row.exemption" :note="row.exemptNote" /></template></el-table-column>
             <el-table-column label="部门" prop="dept" min-width="150" />
             <el-table-column label="职级" prop="level" width="70" />
-            <el-table-column label="司龄" width="70" align="right"><template #default="{ row }">{{ row.tenure ?? '—' }}</template></el-table-column>
-            <el-table-column label="上次 1v1" width="100"><template #default="{ row }">{{ row.last1v1 || '—' }}</template></el-table-column>
-            <el-table-column v-if="data.seeCost" label="今年成本" width="100" align="right"><template #default="{ row }">{{ wan(row.costYtd) }}</template></el-table-column>
+            <el-table-column label="司龄" width="70" align="right"><template v-slot="{ row }">{{ row.tenure ?? '—' }}</template></el-table-column>
+            <el-table-column label="上次 1v1" width="100"><template v-slot="{ row }">{{ row.last1v1 || '—' }}</template></el-table-column>
+            <el-table-column v-if="data.seeCost" label="今年成本" width="100" align="right"><template v-slot="{ row }">{{ wan(row.costYtd) }}</template></el-table-column>
             <el-table-column label="要留意" min-width="280">
-              <template #default="{ row }">
+              <template v-slot="{ row }">
                 <el-tag v-for="f in row.flags" :key="f.code + f.text" size="small" :type="FLAG_LEVEL[f.level]" style="margin: 0 4px 2px 0">{{ f.text }}</el-tag>
               </template>
             </el-table-column>

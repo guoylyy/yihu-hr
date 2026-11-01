@@ -48,4 +48,15 @@ export async function appInfo() {
   }
 }
 
+/** 平台可用模型（OpenAI /models 形态，不走 ws.call 的 code 包装）；没接平台或取不到时返回 []，只用来展示 */
+export async function llmModels() {
+  if (!ws.enabled) return []
+  try {
+    const r = await fetch(`${ws.apiUrl}/api/open/llm/models`, { headers: appBasic(), signal: AbortSignal.timeout(3000) })
+    return r.ok ? (await r.json())?.data || [] : []
+  } catch {
+    return []
+  }
+}
+
 export const appUrl = (path = '/') => (ws.appUrl ? `${ws.appUrl}/#${path}` : undefined)

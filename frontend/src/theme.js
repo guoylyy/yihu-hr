@@ -1,4 +1,5 @@
-// 跟随以虎 One 的外观：/api/me 的 brand.theme.tokens 覆盖 styles.css 里的默认变量。没有 brand 就用默认
+// 跟随以虎 One 的外观：/api/me 的 brand.theme.tokens 覆盖 yh-vi.css 的 --yh-* 默认值。
+// 只写 --yh-*：--hr-* 和 --el-* 在 styles.css 里都指向 --yh-*，跟着变。没有 brand 就用 yh-vi.css
 function hexToRgb(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
   if (!m) return null
@@ -16,20 +17,18 @@ export function applyBrand(brand) {
   const p = hexToRgb(t.primary)
   if (p) {
     const white = [255, 255, 255], black = [0, 0, 0]
-    set('--hr-primary', toHex(p))
-    set('--hr-on-primary', luminance(p) > 0.6 ? '#1c1917' : '#ffffff')
-    set('--el-color-primary', toHex(p))
-    for (const [k, w] of [[3, 0.3], [5, 0.5], [7, 0.7], [8, 0.8], [9, 0.9]]) set(`--el-color-primary-light-${k}`, toHex(mix(p, white, w)))
-    set('--el-color-primary-dark-2', toHex(mix(p, black, 0.2)))
-    set('--hr-primary-soft', toHex(mix(p, white, 0.9)))
+    set('--yh-primary', toHex(p))
+    set('--yh-on-primary', hexToRgb(t.onPrimary) ? t.onPrimary : luminance(p) > 0.6 ? 'var(--yh-text)' : 'var(--yh-card)')
+    set('--yh-primary-dark', toHex(luminance(p) < 0.25 ? mix(p, white, 0.18) : mix(p, black, 0.2)))
+    set('--yh-primary-soft', toHex(mix(p, white, 0.9)))
   }
-  if (hexToRgb(t.highlight)) set('--hr-accent', t.highlight)
-  if (hexToRgb(t.bg)) { set('--hr-bg', t.bg); set('--el-bg-color-page', t.bg) }
-  if (hexToRgb(t.text)) { set('--hr-text', t.text); set('--el-text-color-primary', t.text) }
-  if (hexToRgb(t.border)) { set('--hr-border', t.border); set('--el-border-color', t.border) }
+  if (hexToRgb(t.highlight)) set('--yh-highlight', t.highlight)
+  if (hexToRgb(t.bg)) set('--yh-bg', t.bg)
+  if (hexToRgb(t.text)) set('--yh-text', t.text)
+  if (hexToRgb(t.border)) set('--yh-border', t.border)
   if (Number.isFinite(Number(t.radius)) && t.radius !== '') {
-    set('--hr-radius', `${Number(t.radius)}px`)
-    set('--el-border-radius-base', `${Math.min(Number(t.radius), 8)}px`)
+    set('--yh-radius', `${Number(t.radius)}px`)
+    set('--yh-radius-sm', `${Math.round(Number(t.radius) * 2 / 3)}px`)
   }
-  if (t.font) set('--hr-font', t.font)
+  if (t.font) set('--yh-font', t.font)
 }

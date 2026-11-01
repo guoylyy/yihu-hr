@@ -22,7 +22,7 @@ const pct = (v) => {
 .bars { display: flex; flex-direction: column; gap: 6px; }
 .row { display: grid; grid-template-columns: minmax(70px, 30%) 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
 .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hr-muted); }
-.track { height: 8px; background: var(--hr-bg); border-radius: 4px; overflow: hidden; }
-.fill { display: block; height: 100%; background: var(--hr-primary); border-radius: 4px; }
+.track { height: 8px; background: var(--hr-bg); border-radius: var(--yh-radius-sm); overflow: hidden; }
+.fill { display: block; height: 100%; background: var(--hr-primary); border-radius: var(--yh-radius-sm); }
 .v { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
 </style>

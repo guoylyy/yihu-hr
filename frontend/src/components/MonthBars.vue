@@ -19,6 +19,6 @@ const h = (v) => {
 <style scoped>
 .months { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 6px; }
 .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
-.bar { width: 100%; max-width: 28px; background: var(--hr-primary); border-radius: 4px 4px 0 0; }
+.bar { width: 100%; max-width: 28px; background: var(--hr-primary); border-radius: var(--yh-radius-sm) var(--yh-radius-sm) 0 0; }
 .lbl { font-size: 11px; color: var(--hr-muted); margin-top: 4px; }
 </style>

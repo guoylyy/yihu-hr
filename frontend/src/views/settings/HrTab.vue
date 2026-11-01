@@ -6,12 +6,12 @@
       <el-button type="primary" :disabled="!pick" @click="add">添加</el-button>
     </div>
     <div class="card table-wrap">
-      <el-table v-loading="loading" :data="list" size="small" empty-text="还没有加人事成员">
+      <el-table v-card-list v-loading="loading" :data="list" size="small" empty-text="还没有加人事成员">
         <el-table-column label="姓名" prop="name" min-width="90" />
         <el-table-column label="工号" prop="jobNumber" min-width="80" />
         <el-table-column label="部门" prop="deptPath" min-width="160" />
-        <el-table-column label="加入时间" min-width="140"><template #default="{ row }">{{ fmtTime(row.addedAt) }}</template></el-table-column>
-        <el-table-column label="" width="60" fixed="right"><template #default="{ row }"><el-button link type="danger" @click="remove(row)">移除</el-button></template></el-table-column>
+        <el-table-column label="加入时间" min-width="140"><template v-slot="{ row }">{{ fmtTime(row.addedAt) }}</template></el-table-column>
+        <el-table-column label="" width="60" fixed="right"><template v-slot="{ row }"><el-button link type="danger" @click="remove(row)">移除</el-button></template></el-table-column>
       </el-table>
     </div>
   </div>

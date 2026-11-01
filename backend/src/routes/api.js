@@ -18,6 +18,7 @@ import * as absences from '../services/absences.js'
 import * as importer from '../services/importer.js'
 import * as profileSync from '../services/profileSync.js'
 import * as advisor from '../services/advisor.js'
+import * as about from '../services/about.js'
 import { contractScope, costScope } from '../services/access.js'
 import { VERSION } from '../lib/version.js'
 
@@ -38,6 +39,8 @@ r.get('/me', wrap(async (req) => {
     sources: PROVIDERS.filter(p => p.configured()).map(p => ({ source: p.source, label: p.label }))
   }
 }))
+
+r.get('/about', wrap(() => about.aboutInfo()))
 
 /** 下载 CSV：出错时回 JSON（前端在新窗口打开，看得到原因） */
 const csvRoute = (fn) => async (req, res) => {

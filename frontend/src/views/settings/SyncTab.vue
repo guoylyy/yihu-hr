@@ -9,7 +9,7 @@
         <el-tag v-else-if="s.configured" type="success" size="small">已配置</el-tag>
         <el-tag v-else type="info" size="small">未配置</el-tag>
         <el-tag v-if="s.running" type="warning" size="small">同步中</el-tag>
-        <el-button v-if="s.configured" size="small" style="margin-left: auto" :loading="busy === s.source" @click="run({ source: s.source })">立即同步</el-button>
+        <el-button v-if="s.configured" style="margin-left: auto" :loading="busy === s.source" @click="run({ source: s.source })">立即同步</el-button>
       </div>
       <div v-if="!s.configured && s.setupHint" class="help">{{ s.setupHint }}<span v-if="s.platformError" class="muted">（平台返回：{{ s.platformError }}）</span></div>
       <!-- 请假 / 出差 / 外出：和打卡一起同步，结果单独看 -->
@@ -26,23 +26,23 @@
         <div v-if="s.absence.last && !s.absence.last.ok" class="small">怎么办：{{ s.absence.hint }}。开好后点「立即同步」，第一次成功时会把最近 90 天的请假补拉回来。</div>
       </div>
       <div v-if="s.runs.length" class="table-wrap">
-        <el-table :data="s.runs.slice(0, 5)" size="small">
-          <el-table-column label="开始" min-width="140"><template #default="{ row }">{{ fmtTime(row.startedAt) }}</template></el-table-column>
-          <el-table-column label="方式" min-width="56"><template #default="{ row }">{{ row.trigger === 'MANUAL' ? '手动' : '定时' }}</template></el-table-column>
-          <el-table-column label="日期范围" min-width="170"><template #default="{ row }">{{ row.dateFrom ? `${row.dateFrom} ~ ${row.dateTo}` : '' }}</template></el-table-column>
+        <el-table v-card-list :data="s.runs.slice(0, 5)" size="small">
+          <el-table-column label="开始" min-width="140"><template v-slot="{ row }">{{ fmtTime(row.startedAt) }}</template></el-table-column>
+          <el-table-column label="方式" min-width="56"><template v-slot="{ row }">{{ row.trigger === 'MANUAL' ? '手动' : '定时' }}</template></el-table-column>
+          <el-table-column label="日期范围" min-width="170"><template v-slot="{ row }">{{ row.dateFrom ? `${row.dateFrom} ~ ${row.dateTo}` : '' }}</template></el-table-column>
           <el-table-column label="结果" min-width="70">
-            <template #default="{ row }">
+            <template v-slot="{ row }">
               <el-tag v-if="row.ok === true" type="success" size="small">成功</el-tag>
               <el-tag v-else-if="row.ok === false" type="danger" size="small">失败</el-tag>
               <el-tag v-else size="small" type="info">进行中</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="打卡 拉取 / 保存" min-width="110"><template #default="{ row }">{{ row.fetched }} / {{ row.saved }}</template></el-table-column>
+          <el-table-column label="打卡 拉取 / 保存" min-width="110"><template v-slot="{ row }">{{ row.fetched }} / {{ row.saved }}</template></el-table-column>
           <el-table-column label="请假等" min-width="64">
-            <template #default="{ row }"><span v-if="row.absenceOk === false" class="err">失败</span><span v-else-if="row.absenceOk">{{ row.absences }}</span></template>
+            <template v-slot="{ row }"><span v-if="row.absenceOk === false" class="err">失败</span><span v-else-if="row.absenceOk">{{ row.absences }}</span></template>
           </el-table-column>
           <el-table-column label="说明" min-width="200">
-            <template #default="{ row }"><span :class="{ err: row.ok === false }">{{ row.error }}</span><span v-if="row.absenceError" :class="row.absenceOk === false ? 'err' : 'muted'">{{ row.error ? '；' : '' }}{{ row.absenceOk === false ? '请假：' : '' }}{{ row.absenceError }}</span></template>
+            <template v-slot="{ row }"><span :class="{ err: row.ok === false }">{{ row.error }}</span><span v-if="row.absenceError" :class="row.absenceOk === false ? 'err' : 'muted'">{{ row.error ? '；' : '' }}{{ row.absenceOk === false ? '请假：' : '' }}{{ row.absenceError }}</span></template>
           </el-table-column>
         </el-table>
       </div>
@@ -60,7 +60,7 @@
         <h3>从钉钉 / 飞书补全档案</h3>
         <el-tag v-if="!prof.enabled" size="small" type="info">每天自动补全已关（设置 → 规则）</el-tag>
         <el-tag v-if="prof.conflicts.length" size="small" type="warning">{{ prof.conflicts.length }} 处要你选</el-tag>
-        <el-button size="small" style="margin-left: auto" :loading="busy === 'PROFILE'" @click="runProfiles">立即补全</el-button>
+        <el-button style="margin-left: auto" :loading="busy === 'PROFILE'" @click="runProfiles">立即补全</el-button>
       </div>
       <p class="help">平台通讯录只有姓名、部门、工号这些。人事在钉钉智能人事 / 飞书里维护的入职日期、转正日期、出生日期、性别、学历、用工类型，每天拉完通讯录后读过来比一遍：这里空的补上；钉钉 / 飞书上改了的跟着改；这里改过而那边没改的保留；第一次比两边不一样的列在下面让你选。工号只补空的。</p>
       <div v-if="prof.last" class="small" :class="{ err: prof.last.ok === false }">
@@ -71,21 +71,21 @@
       <template v-if="prof.conflicts.length">
         <div class="toolbar" style="margin: 10px 0 6px">
           <b class="small">两边不一样</b>
-          <el-button size="small" :disabled="!conf.sel.length" @click="resolve('VENDOR', conf.sel)">选中的用钉钉 / 飞书的</el-button>
-          <el-button size="small" :disabled="!conf.sel.length" @click="resolve('APP', conf.sel)">选中的保留这里的</el-button>
-          <el-button size="small" link type="primary" @click="resolve('VENDOR')">全部用钉钉 / 飞书的</el-button>
+          <el-button :disabled="!conf.sel.length" @click="resolve('VENDOR', conf.sel)">选中的用钉钉 / 飞书的</el-button>
+          <el-button :disabled="!conf.sel.length" @click="resolve('APP', conf.sel)">选中的保留这里的</el-button>
+          <el-button link type="primary" @click="resolve('VENDOR')">全部用钉钉 / 飞书的</el-button>
         </div>
         <div class="table-wrap">
-          <el-table :data="prof.conflicts" size="small" max-height="360" @selection-change="conf.sel = $event.map(r => r.id)">
+          <el-table v-card-list :data="prof.conflicts" size="small" max-height="360" @selection-change="conf.sel = $event.map(r => r.id)">
             <el-table-column type="selection" width="36" />
-            <el-table-column label="员工" min-width="90"><template #default="{ row }"><router-link :to="`/people/${row.employee?.id}`">{{ row.employee?.name }}</router-link></template></el-table-column>
+            <el-table-column label="员工" min-width="90"><template v-slot="{ row }"><router-link :to="`/people/${row.employee?.id}`">{{ row.employee?.name }}</router-link></template></el-table-column>
             <el-table-column label="字段" prop="label" min-width="80" />
-            <el-table-column label="这里" min-width="100"><template #default="{ row }">{{ show(row.field, row.before) }}</template></el-table-column>
-            <el-table-column label="钉钉 / 飞书" min-width="110"><template #default="{ row }"><b>{{ show(row.field, row.after) }}</b> <span class="muted small">{{ SOURCE[row.source] }}</span></template></el-table-column>
+            <el-table-column label="这里" min-width="100"><template v-slot="{ row }">{{ show(row.field, row.before) }}</template></el-table-column>
+            <el-table-column label="钉钉 / 飞书" min-width="110"><template v-slot="{ row }"><b>{{ show(row.field, row.after) }}</b> <span class="muted small">{{ SOURCE[row.source] }}</span></template></el-table-column>
             <el-table-column label="" width="150">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="resolve('VENDOR', [row.id])">用那边的</el-button>
-                <el-button link size="small" @click="resolve('APP', [row.id])">保留这里的</el-button>
+              <template v-slot="{ row }">
+                <el-button link type="primary" @click="resolve('VENDOR', [row.id])">用那边的</el-button>
+                <el-button link @click="resolve('APP', [row.id])">保留这里的</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -171,8 +171,8 @@ async function run(body, key) {
 .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .head h3 { margin: 0; }
 .err { color: var(--hr-danger); }
-.absence { margin: 8px 0; padding: 8px 12px; border-radius: 8px; background: var(--hr-bg); display: flex; flex-direction: column; gap: 4px; }
+.absence { margin: 8px 0; padding: 8px 12px; border-radius: var(--yh-radius-sm); background: var(--hr-bg); display: flex; flex-direction: column; gap: 4px; }
 .absence.bad { background: var(--el-color-danger-light-9); }
 .absence .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-code { background: var(--hr-bg); padding: 1px 4px; border-radius: 4px; }
+code { background: var(--hr-bg); padding: 1px 4px; border-radius: var(--yh-radius-sm); }
 </style>

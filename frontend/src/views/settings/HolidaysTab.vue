@@ -5,13 +5,13 @@
       <el-button type="primary" @click="imp.open = true">录入</el-button>
     </div>
     <div class="card table-wrap">
-      <el-table v-loading="loading" :data="list" size="small" empty-text="这一年还没有录入节假日">
-        <el-table-column label="日期" min-width="110"><template #default="{ row }">{{ row.date }} 周{{ weekdayOf(row.date) }}</template></el-table-column>
+      <el-table v-card-list v-loading="loading" :data="list" size="small" empty-text="这一年还没有录入节假日">
+        <el-table-column label="日期" min-width="110"><template v-slot="{ row }">{{ row.date }} 周{{ weekdayOf(row.date) }}</template></el-table-column>
         <el-table-column label="类型" min-width="80">
-          <template #default="{ row }"><el-tag :type="row.kind === 'HOLIDAY' ? 'success' : 'warning'" size="small">{{ row.kind === 'HOLIDAY' ? '放假' : '调休上班' }}</el-tag></template>
+          <template v-slot="{ row }"><el-tag :type="row.kind === 'HOLIDAY' ? 'success' : 'warning'" size="small">{{ row.kind === 'HOLIDAY' ? '放假' : '调休上班' }}</el-tag></template>
         </el-table-column>
         <el-table-column label="名称" prop="name" min-width="120" />
-        <el-table-column label="" width="60" fixed="right"><template #default="{ row }"><el-button link type="danger" @click="del(row)">删除</el-button></template></el-table-column>
+        <el-table-column label="" width="60" fixed="right"><template v-slot="{ row }"><el-button link type="danger" @click="del(row)">删除</el-button></template></el-table-column>
       </el-table>
     </div>
     <p class="help">每年国务院公布放假安排后录一次。周末默认不上班（在「规则」里改），调休上班的周末要录成「班」。</p>

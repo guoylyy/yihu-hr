@@ -1,6 +1,7 @@
 {
   "code": "hr",
   "name": "人事考勤",
+  "version": "0.3.5",
   "icon": "icon.svg",
   "category": "人事行政",
   "description": "钉钉 / 飞书 / 企业微信的打卡、请假、出差汇总统计（月历、团队矩阵）、年假余额；智能导入档案；合同与协议、人员成本、1v1 记录、人员画像与全景",
@@ -13,6 +14,7 @@
   "memory": "384m",
   "visibility": null,
   "isDefault": false,
+  "ui": { "responsive": true },
   "env": {},
   "deploy": {
     "branch": "release",

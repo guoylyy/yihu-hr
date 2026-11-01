@@ -19,6 +19,7 @@ const routes = [
   { path: '/balances', component: () => import('./views/Balances.vue'), meta: { title: '假期余额', need: 'hr' } },
   { path: '/import', component: () => import('./views/Import.vue'), meta: { title: '智能导入', need: 'hr' } },
   { path: '/settings', component: () => import('./views/Settings.vue'), meta: { title: '设置', need: 'hr' } },
+  { path: '/about', component: () => import('./views/About.vue'), meta: { title: '关于' } },
   { path: '/:p(.*)*', redirect: '/' }
 ]
 

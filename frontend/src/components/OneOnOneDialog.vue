@@ -8,13 +8,13 @@
         <div class="row">
           <b>从会议纪要导入</b>
           <input ref="fileInput" type="file" :accept="ACCEPT" style="display: none" @change="onFile" />
-          <el-button size="small" type="primary" plain :loading="imp.busy && imp.mode === 'file'" :disabled="!form.userId || imp.busy" @click="fileInput.click()">上传纪要文件</el-button>
-          <el-button size="small" :disabled="!form.userId || imp.busy" @click="imp.paste = !imp.paste">粘贴文字</el-button>
+          <el-button type="primary" plain :loading="imp.busy && imp.mode === 'file'" :disabled="!form.userId || imp.busy" @click="fileInput.click()">上传纪要文件</el-button>
+          <el-button :disabled="!form.userId || imp.busy" @click="imp.paste = !imp.paste">粘贴文字</el-button>
           <span class="muted small">飞书妙记、钉钉闪记、腾讯会议导出的纪要 / 文字稿（Word、PDF、txt、字幕 srt / vtt）</span>
         </div>
         <template v-if="imp.paste">
           <el-input v-model="imp.text" type="textarea" :rows="5" placeholder="把会议纪要或录音转写的文字粘贴进来" style="margin-top: 8px" />
-          <el-button size="small" type="primary" style="margin-top: 6px" :loading="imp.busy && imp.mode === 'text'" :disabled="!imp.text.trim()" @click="parse({ text: imp.text }, 'text')">解析</el-button>
+          <el-button type="primary" style="margin-top: 6px" :loading="imp.busy && imp.mode === 'text'" :disabled="!imp.text.trim()" @click="parse({ text: imp.text }, 'text')">解析</el-button>
         </template>
         <el-progress v-if="imp.busy && imp.progress < 100 && imp.mode === 'file'" :percentage="imp.progress" :stroke-width="5" style="margin-top: 6px" />
         <div v-if="imp.busy" class="muted small" style="margin-top: 4px">{{ imp.progress < 100 && imp.mode === 'file' ? '上传中…' : '正在读纪要、整理要点和待办…' }}</div>
@@ -23,8 +23,8 @@
         <div v-if="form.sourceText || form.sourceFileName" class="source">
           <span v-if="form.sourceFileName">📎 <a v-if="form.id && hasSavedFile" :href="`api/one-on-ones/${form.id}/file`" target="_blank">{{ form.sourceFileName }}</a><template v-else>{{ form.sourceFileName }}</template></span>
           <span v-else-if="form.sourceText" class="muted small">粘贴的文字</span>
-          <el-button v-if="form.sourceText" link size="small" type="primary" @click="imp.showText = !imp.showText">{{ imp.showText ? '收起' : '看' }}原始纪要（{{ form.sourceText.length }} 字）</el-button>
-          <el-button link size="small" type="danger" @click="clearSource">去掉</el-button>
+          <el-button v-if="form.sourceText" link type="primary" @click="imp.showText = !imp.showText">{{ imp.showText ? '收起' : '看' }}原始纪要（{{ form.sourceText.length }} 字）</el-button>
+          <el-button link type="danger" @click="clearSource">去掉</el-button>
           <el-checkbox v-model="form.sourceShared" size="small">原始纪要也给本人看</el-checkbox>
           <pre v-if="imp.showText" class="source-text">{{ form.sourceText }}</pre>
         </div>
@@ -196,7 +196,7 @@ async function save() {
 .import { margin: 0 0 14px 76px; padding: 10px 12px; border: 1px dashed var(--hr-border); border-radius: var(--hr-radius); background: var(--hr-bg); }
 .import .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .source { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.source-text { flex-basis: 100%; max-height: 260px; overflow: auto; white-space: pre-wrap; font-family: inherit; font-size: 12px; background: var(--hr-surface); border: 1px solid var(--hr-border); border-radius: 6px; padding: 8px 10px; margin: 0; }
+.source-text { flex-basis: 100%; max-height: 260px; overflow: auto; white-space: pre-wrap; font-family: inherit; font-size: 12px; background: var(--hr-surface); border: 1px solid var(--hr-border); border-radius: var(--yh-radius-sm); padding: 8px 10px; margin: 0; }
 @media (max-width: 760px) { .import { margin-left: 0; } }
 .action-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
 .action-row .el-input { flex: 1; min-width: 160px; }

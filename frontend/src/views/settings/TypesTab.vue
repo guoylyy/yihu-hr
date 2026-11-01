@@ -2,16 +2,16 @@
   <div>
     <div class="toolbar" style="margin-bottom: 12px"><el-button type="primary" @click="openEdit()">新增假期类型</el-button></div>
     <div class="card table-wrap">
-      <el-table v-loading="loading" :data="types" size="small">
+      <el-table v-card-list v-loading="loading" :data="types" size="small">
         <el-table-column label="代码" prop="code" min-width="110" />
         <el-table-column label="名称" prop="name" min-width="80" />
-        <el-table-column label="带薪" min-width="60"><template #default="{ row }">{{ row.paid ? '是' : '否' }}</template></el-table-column>
-        <el-table-column label="扣余额" min-width="60"><template #default="{ row }">{{ row.balanced ? '是' : '否' }}</template></el-table-column>
-        <el-table-column label="最小单位" min-width="70"><template #default="{ row }">{{ row.unit === 'DAY' ? '整天' : '半天' }}</template></el-table-column>
-        <el-table-column label="启用" min-width="60"><template #default="{ row }"><el-tag :type="row.active ? 'success' : 'info'" size="small">{{ row.active ? '启用' : '停用' }}</el-tag></template></el-table-column>
+        <el-table-column label="带薪" min-width="60"><template v-slot="{ row }">{{ row.paid ? '是' : '否' }}</template></el-table-column>
+        <el-table-column label="扣余额" min-width="60"><template v-slot="{ row }">{{ row.balanced ? '是' : '否' }}</template></el-table-column>
+        <el-table-column label="最小单位" min-width="70"><template v-slot="{ row }">{{ row.unit === 'DAY' ? '整天' : '半天' }}</template></el-table-column>
+        <el-table-column label="启用" min-width="60"><template v-slot="{ row }"><el-tag :type="row.active ? 'success' : 'info'" size="small">{{ row.active ? '启用' : '停用' }}</el-tag></template></el-table-column>
         <el-table-column label="排序" prop="sort" min-width="50" />
         <el-table-column label="说明" prop="note" min-width="180" />
-        <el-table-column label="" width="60" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button></template></el-table-column>
+        <el-table-column label="" width="60" fixed="right"><template v-slot="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button></template></el-table-column>
       </el-table>
     </div>
     <p class="help">钉钉 / 飞书 / 企业微信同步来的请假按<b>名称</b>对上这里的类型（年休假 = 年假、调休假 = 调休），对上「扣余额」的类型就自动扣余额、撤销了退回；对不上的照样算进考勤，只是不扣余额。年假（ANNUAL）由「假期余额 → 发放年假」按工龄发；余额也可以在「智能导入」里按表导入。</p>

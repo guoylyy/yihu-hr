@@ -1,32 +1,79 @@
-/* 颜色、圆角都走变量；接入平台后由 theme.js 按平台外观覆盖 */
+/* 令牌来自 yh-vi.css（平台同步）。这里不定义颜色，--hr-* 只是 --yh-* 的别名，主题跟平台走（theme.js 只写 --yh-*） */
 :root {
-  --hr-primary: #0f766e;
-  --hr-on-primary: #ffffff;
-  --hr-primary-soft: #e7f1f0;
-  --hr-accent: #d2521e;
-  --hr-bg: #f6f7f8;
-  --hr-surface: #ffffff;
-  --hr-text: #1f2328;
-  --hr-muted: #6b7280;
-  --hr-border: #e5e7eb;
-  --hr-radius: 10px;
-  --hr-font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-  --hr-ok: #16a34a;
-  --hr-warn: #d97706;
-  --hr-danger: #dc2626;
-  --el-color-primary: #0f766e;
-  --el-color-primary-light-3: #57a19a;
-  --el-color-primary-light-5: #87bbb7;
-  --el-color-primary-light-7: #b7d6d4;
-  --el-color-primary-light-8: #cfe4e2;
-  --el-color-primary-light-9: #e7f1f0;
-  --el-color-primary-dark-2: #0c5e58;
+  --hr-primary: var(--yh-primary);
+  --hr-on-primary: var(--yh-on-primary);
+  --hr-primary-soft: var(--yh-primary-soft);
+  --hr-accent: var(--yh-highlight);
+  --hr-bg: var(--yh-bg);
+  --hr-surface: var(--yh-card);
+  --hr-text: var(--yh-text);
+  --hr-muted: var(--yh-text-3);
+  --hr-border: var(--yh-border);
+  --hr-radius: var(--yh-radius);
+  --hr-font: var(--yh-font);
+  --hr-ok: var(--yh-success);
+  --hr-warn: var(--yh-warning);
+  --hr-danger: var(--yh-danger);
+}
+
+/* Element Plus 从 --yh-* 推出来。按需引入的组件样式会带自己的 :root，用 html:root 压住 */
+html:root {
+  --el-color-primary: var(--yh-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--yh-primary) 70%, var(--yh-card));
+  --el-color-primary-light-5: color-mix(in srgb, var(--yh-primary) 50%, var(--yh-card));
+  --el-color-primary-light-7: color-mix(in srgb, var(--yh-primary) 30%, var(--yh-card));
+  --el-color-primary-light-8: color-mix(in srgb, var(--yh-primary) 20%, var(--yh-card));
+  --el-color-primary-light-9: var(--yh-primary-soft);
+  --el-color-primary-dark-2: var(--yh-primary-dark);
+  --el-color-success: var(--yh-success);
+  --el-color-success-light-9: color-mix(in srgb, var(--yh-success) 10%, var(--yh-card));
+  --el-color-warning: var(--yh-warning);
+  --el-color-warning-light-9: color-mix(in srgb, var(--yh-warning) 10%, var(--yh-card));
+  --el-color-danger: var(--yh-danger);
+  --el-color-danger-light-5: color-mix(in srgb, var(--yh-danger) 50%, var(--yh-card));
+  --el-color-danger-light-9: color-mix(in srgb, var(--yh-danger) 10%, var(--yh-card));
+  --el-color-error: var(--yh-danger);
+  --el-color-error-light-9: color-mix(in srgb, var(--yh-danger) 10%, var(--yh-card));
+  --el-text-color-primary: var(--yh-text);
+  --el-text-color-regular: var(--yh-text-2);
+  --el-text-color-secondary: var(--yh-text-3);
+  --el-text-color-placeholder: var(--yh-text-3);
+  --el-border-color: var(--yh-border);
+  --el-border-color-light: var(--yh-border);
+  --el-border-color-lighter: var(--yh-border-soft);
+  --el-bg-color: var(--yh-card);
+  --el-bg-color-overlay: var(--yh-card);
+  --el-bg-color-page: var(--yh-bg);
+  --el-fill-color-light: var(--yh-fill);
+  --el-fill-color-lighter: var(--yh-fill);
+  --el-border-radius-base: var(--yh-radius-sm);
+  --el-font-family: var(--yh-font);
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--hr-bg); color: var(--hr-text); font-family: var(--hr-font); font-size: 14px; }
+html, body { margin: 0; background: var(--hr-bg); color: var(--hr-text); font-family: var(--hr-font); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
 body { overflow-x: hidden; }
-a { color: var(--hr-primary); text-decoration: none; }
+a { color: var(--hr-accent); text-decoration: none; }
+
+/* VI：主按钮主色底，次按钮描边，文字按钮纯文字；链接、文字按钮用强调色。和控制台 main.css 同一套 */
+.el-button--primary {
+  --el-button-text-color: var(--yh-on-primary);
+  --el-button-hover-text-color: var(--yh-on-primary);
+  --el-button-active-text-color: var(--yh-on-primary);
+  --el-button-disabled-text-color: var(--yh-on-primary);
+  --el-button-hover-bg-color: var(--yh-primary-dark);
+  --el-button-hover-border-color: var(--yh-primary-dark);
+}
+.el-button--primary.is-link, .el-button--primary.is-text, .el-link.el-link--primary {
+  --el-button-text-color: var(--yh-highlight);
+  --el-button-hover-link-text-color: var(--yh-highlight);
+  --el-link-text-color: var(--yh-highlight);
+  --el-link-hover-text-color: var(--yh-highlight);
+}
+.el-button--primary.is-link:not(.is-disabled):hover, .el-button--primary.is-text:not(.is-disabled):hover { opacity: .8; }
+.el-tabs__active-bar { background-color: var(--yh-highlight); }
+.el-table { --el-table-header-bg-color: var(--yh-fill); }
+.el-table th.el-table__cell { font-weight: 500; color: var(--yh-text-2); }
 
 .page { padding: 20px 24px; max-width: 1280px; }
 /* 日历、矩阵这类要横向铺开的页面 */
@@ -46,11 +93,75 @@ a { color: var(--hr-primary); text-decoration: none; }
 .tile.bad .v { color: var(--hr-danger); }
 .tile.warn .v { color: var(--hr-warn); }
 .tile.good .v { color: var(--hr-ok); }
-.link { color: var(--hr-primary); cursor: pointer; }
+/* 紧凑数字条：一条放多个 .yh-stat，不做成一张张卡片；窄屏连底框也去掉 */
+.yh-stats { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; margin-bottom: 16px; background: var(--yh-card); border: 1px solid var(--yh-border); border-radius: var(--yh-radius); }
+.yh-stat { display: flex; flex-direction: column; min-width: 0; }
+.yh-stat b { font-family: var(--yh-font-num); font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--yh-text); font-variant-numeric: tabular-nums; }
+.yh-stat span { font-size: 12px; color: var(--yh-text-3); white-space: nowrap; }
+.yh-stat i { font-style: normal; }
+.yh-stat.is-alert b { color: var(--yh-danger); }
+/* chip 开关：看起来比点击区矮，::after 把点击区撑到 44px */
+.yh-tag { position: relative; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--yh-border); border-radius: var(--yh-radius-sm); background: var(--yh-card); color: var(--yh-text-2); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.yh-tag::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+.yh-tag.is-on { background: var(--yh-primary); border-color: var(--yh-primary); color: var(--yh-on-primary); }
+.link { color: var(--hr-accent); cursor: pointer; }
 .pre { white-space: pre-wrap; }
 .help { color: var(--hr-muted); font-size: 12px; line-height: 1.6; margin: 4px 0 8px; }
 
 @media (max-width: 760px) {
-  .page { padding: 14px 16px; }
+  .page { padding: 12px 16px; }
+  .card { padding: 12px; }
   .page-head h2 { font-size: 18px; }
+  .el-dialog { width: 92vw !important; }
+  .el-drawer { max-width: 92vw; }
+  .yh-stats { justify-content: flex-start; gap: 20px; padding: 0; margin-bottom: 8px; background: none; border: 0; border-radius: 0; }
+  /* 底部 sheet：全宽，顶部圆角 */
+  .el-drawer.yh-sheet { max-width: none; border-radius: var(--yh-radius) var(--yh-radius) 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .yh-sheet .el-drawer__header { margin-bottom: 0; padding: 8px 8px 8px 16px; }
+  .yh-sheet .el-drawer__close-btn { width: 44px; height: 44px; }
+  .yh-sheet .el-drawer__body { padding: 12px 16px 24px; }
+}
+/* 平板：sidebar 占掉一块，9 项放一行时去掉「人次 / 人天」 */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .yh-stats { padding: 10px 12px; }
+  .yh-stat i { display: none; }
+}
+
+/* 触屏：能点的东西不小于 44px。Element 的控件高度都读这三个变量 */
+@media (max-width: 760px), (pointer: coarse) {
+  html:root { --el-component-size: 44px; --el-component-size-small: 44px; --el-component-size-large: 44px; }
+  .el-button, .el-radio-button__inner, .el-tabs__item, .el-checkbox, .el-radio, .el-dropdown-menu__item, .el-select-dropdown__item, .el-pagination button, .yh-tag { min-height: 44px; }
+  .el-button.is-link, .el-button.is-text { padding-left: 8px; padding-right: 8px; min-width: 44px; }
+  .el-radio-button__inner { display: inline-flex; align-items: center; }
+  .el-checkbox, .el-radio { min-width: 44px; }
+  .el-tabs__item { height: 44px; line-height: 44px; }
+  .el-select__wrapper { min-height: 44px; }
+  .link, .main a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+}
+
+/* 窄屏把 el-table 排成卡片：每行一张，「列名 + 值」上下排开。v-card-list（cardList.js）给每格写上 data-label */
+@media (max-width: 760px) {
+  [data-card-list], [data-card-list] .el-table__inner-wrapper { overflow: visible; max-height: none !important; height: auto !important; background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-row-hover-bg-color: transparent; --el-table-header-bg-color: transparent; }
+  [data-card-list] .el-table__inner-wrapper::before, [data-card-list] .el-table__border-left-patch { display: none; }
+  [data-card-list] .el-scrollbar__wrap, [data-card-list] .el-table__body-wrapper, [data-card-list] .el-table__header-wrapper, [data-card-list] .el-table__footer-wrapper { overflow: visible !important; max-height: none !important; height: auto !important; }
+  [data-card-list] .el-scrollbar__bar { display: none; }
+  [data-card-list] .el-scrollbar__view { display: block !important; }
+  [data-card-list] table, [data-card-list] tbody, [data-card-list] tfoot { display: block; width: 100% !important; }
+  [data-card-list] colgroup { display: none; }
+  /* 表头只留全选框，其余列名已经写进每张卡片 */
+  [data-card-list] .el-table__header-wrapper { display: none; }
+  [data-card-list][data-select] .el-table__header-wrapper { display: block; margin-bottom: 8px; }
+  [data-card-list] thead, [data-card-list] thead tr { display: block; }
+  [data-card-list] thead th { display: none; background: none; }
+  [data-card-list] thead th[data-keep] { display: block; border: 0; padding: 0; width: auto !important; }
+  [data-card-list] tbody tr, [data-card-list] tfoot tr { display: block; background: var(--hr-surface); border: 1px solid var(--hr-border); border-radius: var(--hr-radius); padding: 6px 12px; margin-bottom: 8px; }
+  [data-card-list] tfoot tr { background: var(--yh-fill); }
+  [data-card-list] td.el-table__cell { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100% !important; padding: 4px 0; border: 0; background: none !important; position: static !important; }
+  /* 固定列的 ::before / ::after 是 Element 的滚动阴影，这里占来放列名 */
+  [data-card-list] td.el-table__cell::after { display: none !important; }
+  [data-card-list] td.el-table__cell::before { content: attr(data-label) !important; position: static !important; width: auto !important; height: auto !important; flex: none; background: none; box-shadow: none !important; color: var(--hr-muted); font-size: 12px; }
+  [data-card-list] td.el-table__cell[data-label='']::before { display: none; }
+  [data-card-list] td.el-table__cell[data-label=''] .cell { text-align: left; }
+  [data-card-list] td.el-table__cell .cell { flex: 1; min-width: 0; padding: 0; text-align: right; white-space: normal; word-break: break-word; line-height: 1.5; }
+  [data-card-list] .el-table__empty-block { width: 100% !important; min-height: 60px; }
 }

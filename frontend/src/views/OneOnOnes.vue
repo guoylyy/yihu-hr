@@ -97,7 +97,7 @@ async function remove(r) {
 
 <style scoped>
 .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
-.roster { position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow: auto; padding: 10px; }
+.roster { position: sticky; top: calc(var(--yh-header-h) + 12px); max-height: calc(100vh - 120px); overflow: auto; padding: 10px; }
 .person { display: flex; justify-content: space-between; gap: 8px; padding: 8px; border-radius: var(--hr-radius); cursor: pointer; }
 .person:hover { background: var(--hr-bg); }
 .person.on { background: var(--hr-primary-soft); }

@@ -118,7 +118,7 @@ function reset() {
 .md :deep(p) { margin: 0 0 8px; }
 .md :deep(h3), .md :deep(h4), .md :deep(h5) { margin: 14px 0 6px; font-size: 15px; }
 .md :deep(ul), .md :deep(ol) { margin: 0 0 8px; padding-left: 22px; }
-.md :deep(code) { background: var(--hr-bg); padding: 0 4px; border-radius: 4px; }
+.md :deep(code) { background: var(--hr-bg); padding: 0 4px; border-radius: var(--yh-radius-sm); }
 .md :deep(hr) { border: none; border-top: 1px solid var(--hr-border); margin: 12px 0; }
 .md :deep(.md-table) { overflow-x: auto; margin: 0 0 10px; }
 .md :deep(table) { border-collapse: collapse; font-size: 13px; }

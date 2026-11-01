@@ -15,20 +15,20 @@
     </div>
 
     <div class="card table-wrap">
-      <el-table v-loading="loading" :data="data.rows" size="small">
-        <el-table-column label="员工" min-width="90" fixed><template #default="{ row }">{{ row.employee.name }}</template></el-table-column>
-        <el-table-column label="部门" min-width="150"><template #default="{ row }">{{ row.employee.deptPath }}</template></el-table-column>
+      <el-table v-card-list v-loading="loading" :data="data.rows" size="small">
+        <el-table-column label="员工" min-width="90" fixed><template v-slot="{ row }">{{ row.employee.name }}</template></el-table-column>
+        <el-table-column label="部门" min-width="150"><template v-slot="{ row }">{{ row.employee.deptPath }}</template></el-table-column>
         <el-table-column label="入职日期" prop="hireDate" min-width="100" />
         <el-table-column label="参加工作" min-width="100">
-          <template #default="{ row }"><span v-if="row.workStartDate">{{ row.workStartDate }}</span><span v-else class="warn">未填</span></template>
+          <template v-slot="{ row }"><span v-if="row.workStartDate">{{ row.workStartDate }}</span><span v-else class="warn">未填</span></template>
         </el-table-column>
         <el-table-column v-for="t in data.types" :key="t.code" :label="t.name" min-width="90" align="right">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <span class="link" @click="openLedger(row, t)">{{ row.balances[t.code]?.balance ?? 0 }}</span>
           </template>
         </el-table-column>
         <el-table-column label="" width="110" fixed="right">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link type="primary" @click="openAdjust(row)">调整</el-button>
           </template>
@@ -72,13 +72,13 @@
       <el-alert v-if="grant.data?.missing.length" type="warning" :closable="false" style="margin-bottom: 10px"
         :title="`${grant.data.missing.length} 人没填参加工作日期，这次不发：${grant.data.missing.slice(0, 20).map(e => e.name).join('、')}${grant.data.missing.length > 20 ? ' …' : ''}`" />
       <div class="table-wrap">
-        <el-table :data="grant.data?.rows.filter(r => r.delta !== 0) || []" size="small" max-height="400">
-          <el-table-column label="员工" min-width="90"><template #default="{ row }">{{ row.employee.name }}</template></el-table-column>
+        <el-table v-card-list :data="grant.data?.rows.filter(r => r.delta !== 0) || []" size="small" max-height="400">
+          <el-table-column label="员工" min-width="90"><template v-slot="{ row }">{{ row.employee.name }}</template></el-table-column>
           <el-table-column label="已发" prop="before" min-width="60" />
           <el-table-column label="应发" prop="days" min-width="60" />
-          <el-table-column label="变动" min-width="60"><template #default="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</template></el-table-column>
+          <el-table-column label="变动" min-width="60"><template v-slot="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</template></el-table-column>
           <el-table-column label="依据" min-width="260">
-            <template #default="{ row }"><div v-for="s in row.segments" :key="s.from" class="small">{{ s.from }} ~ {{ s.to }}：每年 {{ s.perYear }} 天</div></template>
+            <template v-slot="{ row }"><div v-for="s in row.segments" :key="s.from" class="small">{{ s.from }} ~ {{ s.to }}：每年 {{ s.perYear }} 天</div></template>
           </el-table-column>
         </el-table>
       </div>
@@ -92,11 +92,11 @@
     <el-dialog v-model="carry.open" :title="`${year} 年年假年末结转`" width="min(640px, 96vw)">
       <p v-if="carry.data">每人最多转 <b>{{ carry.data.maxDays }}</b> 天到 {{ year + 1 }} 年，其余清零（上限在「设置 → 规则」里改）。共 {{ carry.data.rows.length }} 人。</p>
       <div class="table-wrap">
-        <el-table :data="carry.data?.rows || []" size="small" max-height="400">
-          <el-table-column label="员工" min-width="90"><template #default="{ row }">{{ row.employee?.name }}</template></el-table-column>
+        <el-table v-card-list :data="carry.data?.rows || []" size="small" max-height="400">
+          <el-table-column label="员工" min-width="90"><template v-slot="{ row }">{{ row.employee?.name }}</template></el-table-column>
           <el-table-column label="剩余" prop="remaining" min-width="70" />
           <el-table-column label="结转" prop="carry" min-width="70" />
-          <el-table-column label="清零" min-width="70"><template #default="{ row }">{{ Math.round((row.remaining - row.carry) * 10) / 10 }}</template></el-table-column>
+          <el-table-column label="清零" min-width="70"><template v-slot="{ row }">{{ Math.round((row.remaining - row.carry) * 10) / 10 }}</template></el-table-column>
         </el-table>
       </div>
       <template #footer>
@@ -106,10 +106,10 @@
     </el-dialog>
 
     <el-drawer v-model="ledger.open" :title="ledger.title" size="min(520px, 100vw)">
-      <el-table :data="ledger.rows" size="small">
-        <el-table-column label="时间" min-width="140"><template #default="{ row }">{{ fmtTime(row.createdAt) }}</template></el-table-column>
-        <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ LEDGER_KIND[row.kind] || row.kind }}</template></el-table-column>
-        <el-table-column label="天数" min-width="60"><template #default="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</template></el-table-column>
+      <el-table v-card-list :data="ledger.rows" size="small">
+        <el-table-column label="时间" min-width="140"><template v-slot="{ row }">{{ fmtTime(row.createdAt) }}</template></el-table-column>
+        <el-table-column label="类型" min-width="80"><template v-slot="{ row }">{{ LEDGER_KIND[row.kind] || row.kind }}</template></el-table-column>
+        <el-table-column label="天数" min-width="60"><template v-slot="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</template></el-table-column>
         <el-table-column label="说明" prop="note" min-width="180" />
       </el-table>
     </el-drawer>

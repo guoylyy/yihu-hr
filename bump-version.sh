@@ -1,7 +1,7 @@
 #!/bin/bash
 # 改人事考勤的版本号：./bump-version.sh <x.y.z>
 # 版本号遵循语义化版本：0.x 是测试版；加功能升次版本号（0.2.0 → 0.3.0），只修问题升修订号（0.2.0 → 0.2.1）。
-# 一处改全：backend / frontend 的 package.json 和 package-lock.json（以虎 One「管理 → 应用」的版本列、应用左上角、/health 都读它），
+# 一处改全：backend / frontend 的 package.json 和 package-lock.json（/health 读它，应用顶栏和关于页读 /health）、yh-app.json（以虎 One「管理 → 应用」的版本列、yh check 读它），
 # 并在 CHANGELOG.md 顶上加一节待填。单元测试会校验前后端一致。改完填好 CHANGELOG、提交，再 ./release.sh
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
@@ -17,6 +17,9 @@ for (let i = 0; i < 3; i++) { if (a[i] > b[i]) process.exit(0); if (a[i] < b[i])
 process.exit(1)" "$NEW" "$CUR" || die "版本号只能往上升（当前 $CUR）"
 
 for d in backend frontend; do (cd "$d" && npm version "$NEW" --no-git-tag-version --allow-same-version >/dev/null) || die "$d 改版本失败"; done
+node -e "
+const fs = require('fs'); const f = 'yh-app.json'
+fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\"version\": \"[^\"]*\"/, '\"version\": \"' + process.argv[1] + '\"'))" "$NEW"
 TODAY="$(date +%Y-%m-%d)"
 node -e "
 const fs = require('fs'); const f = 'CHANGELOG.md'

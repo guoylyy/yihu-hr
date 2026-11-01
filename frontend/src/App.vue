@@ -1,41 +1,59 @@
 <template>
   <div class="shell">
-    <aside class="side">
-      <div class="brand">人事考勤<span v-if="me.version" class="ver" title="人事考勤的版本，更新说明见 CHANGELOG">v{{ me.version }}</span></div>
-      <NavList :items="items" />
-      <div class="who">
-        <span>{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></span>
-        <span class="acts">
-          <a href="logout?switch=1" class="logout" title="退出以虎 One 的登录，换个账号登录后回到这里">换账号</a>
-          <a href="logout" class="logout" title="回以虎 One 工作台（不退出平台登录）">退出</a>
-        </span>
-      </div>
-    </aside>
     <header class="top">
-      <el-button text @click="drawer = true"><el-icon size="20"><Menu /></el-icon></el-button>
-      <span class="brand">人事考勤</span>
-      <span class="who-top">{{ me.user?.name }}</span>
+      <div class="brand">人事考勤</div>
+      <div class="right">
+        <span v-if="me.version && !isMobile" class="ver" title="人事考勤的版本，更新说明见 CHANGELOG">v{{ me.version }}</span>
+        <button v-if="isMobile" class="avatar-btn" aria-label="菜单" @click="drawer = true"><el-avatar :size="32" :src="me.user?.avatar || undefined">{{ initial }}</el-avatar></button>
+        <el-dropdown v-else trigger="click">
+          <button class="avatar-btn" aria-label="账号菜单"><el-avatar :size="32" :src="me.user?.avatar || undefined">{{ initial }}</el-avatar></button>
+          <template v-slot:dropdown>
+            <div class="menu-who">{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></div>
+            <el-dropdown-menu>
+              <el-dropdown-item v-if="me.hr" @click="router.push('/settings')">设置</el-dropdown-item>
+              <el-dropdown-item @click="router.push('/about')">关于</el-dropdown-item>
+              <el-dropdown-item divided @click="logout">退出</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
     </header>
-    <el-drawer v-model="drawer" direction="ltr" size="220px" :with-header="false">
+    <div class="body">
+      <aside class="side"><NavList :items="items" /></aside>
+      <main class="main">
+        <div v-if="!me.loaded" class="page muted">加载失败，请刷新重试</div>
+        <router-view v-else />
+      </main>
+    </div>
+    <!-- 窄屏顶栏只留应用名和头像：导航、版本都收进这里 -->
+    <el-drawer v-model="drawer" direction="rtl" size="260px" :with-header="false">
+      <div class="menu-who">{{ me.user?.name || '未登录' }}<span v-if="me.hr" class="role">人事</span></div>
       <NavList :items="items" @go="drawer = false" />
-      <div v-if="me.version" class="muted small" style="padding: 10px 12px 0">人事考勤 v{{ me.version }}</div>
-      <a href="logout" class="logout drawer-logout">退出，回工作台（{{ me.user?.name }}）</a>
-      <a href="logout?switch=1" class="logout drawer-logout" style="margin-top: 0; border-top: none">换账号</a>
+      <div class="drawer-menu">
+        <router-link to="/about" class="drawer-item">关于</router-link>
+        <a :href="LOGOUT" class="drawer-item">退出</a>
+        <div v-if="me.version" class="muted small drawer-ver">版本 v{{ me.version }}</div>
+      </div>
     </el-drawer>
-    <main class="main">
-      <div v-if="!me.loaded" class="page muted">加载失败，请刷新重试</div>
-      <router-view v-else />
-    </main>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { Menu } from '@element-plus/icons-vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import NavList from './components/NavList.vue'
 import { me } from './me.js'
+import { isMobile } from './viewport.js'
 
+// 先清本应用的会话，再由后端 302 到平台的 /logout?redirect=/apps/hr/（平台也退出，重新登录后回到这里）
+const LOGOUT = 'logout?switch=1'
+const logout = () => { window.location.href = LOGOUT }
+
+const route = useRoute()
+const router = useRouter()
 const drawer = ref(false)
+watch(() => route.fullPath, () => { drawer.value = false })
+const initial = computed(() => [...(me.user?.name || '我')][0])
 const items = computed(() => [
   // 人员全景放最上面（人事和负责人登录后默认也进这里）
   ...(me.team ? [{ to: '/people', label: '人员全景' }, { to: '/advisor', label: '分析建议' }] : []),
@@ -53,23 +71,23 @@ const items = computed(() => [
 </script>
 
 <style scoped>
-.shell { display: flex; min-height: 100vh; }
-.side { width: 200px; flex: none; background: var(--hr-surface); border-right: 1px solid var(--hr-border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
-.brand { font-weight: 600; font-size: 16px; padding: 18px 20px; color: var(--hr-primary); }
-.ver { margin-left: 6px; font-size: 11px; font-weight: normal; color: var(--hr-muted); }
-.who { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hr-border); color: var(--hr-muted); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.logout { color: var(--hr-muted); text-decoration: none; font-size: 13px; }
-.logout:hover { color: var(--hr-primary); }
-.acts { display: flex; gap: 10px; flex: none; }
-.drawer-logout { display: block; margin-top: 16px; padding: 10px 12px; border-top: 1px solid var(--hr-border); }
-.role { margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: var(--hr-primary-soft); color: var(--hr-primary); }
-.top { display: none; }
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+.top { height: calc(var(--yh-header-h) + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 20px 0; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--hr-surface); border-bottom: 1px solid var(--hr-border); position: sticky; top: 0; z-index: 10; }
+.brand { font-weight: 600; font-size: 16px; color: var(--hr-text); white-space: nowrap; }
+.right { display: flex; align-items: center; gap: 12px; flex: none; }
+.ver { font-size: 12px; color: var(--hr-muted); font-family: var(--yh-font-num); font-variant-numeric: tabular-nums; }
+.avatar-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 50%; }
+.avatar-btn :deep(.el-avatar) { background: var(--hr-primary); color: var(--hr-on-primary); font-weight: 600; }
+.menu-who { padding: 10px 16px; color: var(--hr-muted); font-size: 13px; border-bottom: 1px solid var(--hr-border); white-space: nowrap; }
+.role { margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: var(--yh-radius-sm); background: var(--hr-primary-soft); color: var(--hr-primary); }
+.body { display: flex; flex: 1; min-height: 0; }
+.side { width: var(--yh-sidebar-w); flex: none; background: var(--yh-sidebar); border-right: 1px solid var(--hr-border); position: sticky; top: var(--yh-header-h); height: calc(100vh - var(--yh-header-h)); overflow-y: auto; padding-top: 8px; }
 .main { flex: 1; min-width: 0; }
+.drawer-menu { margin-top: 8px; padding: 8px 10px; border-top: 1px solid var(--hr-border); display: flex; flex-direction: column; gap: 2px; }
+.drawer-item { display: flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--hr-text); }
+.drawer-ver { padding: 10px 12px 0; }
 @media (max-width: 760px) {
-  .shell { flex-direction: column; }
+  .top { padding-left: 16px; padding-right: 8px; }
   .side { display: none; }
-  .top { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: var(--hr-surface); border-bottom: 1px solid var(--hr-border); position: sticky; top: 0; z-index: 10; }
-  .top .brand { padding: 0; }
-  .who-top { margin-left: auto; padding-right: 8px; color: var(--hr-muted); font-size: 13px; }
 }
 </style>

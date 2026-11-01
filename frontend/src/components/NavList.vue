@@ -16,7 +16,8 @@ defineEmits(['go'])
 <style scoped>
 .nav { display: flex; flex-direction: column; padding: 4px 10px; gap: 2px; }
 .group { padding: 12px 12px 4px; color: var(--hr-muted); font-size: 12px; }
-.item { padding: 9px 12px; border-radius: var(--hr-radius); color: var(--hr-text); }
-.item:hover { background: var(--hr-bg); }
-.item.on { background: var(--hr-primary-soft); color: var(--hr-primary); font-weight: 600; }
+.item { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: var(--yh-radius-sm); color: var(--hr-text); }
+.item:hover { background: var(--yh-hover); }
+.item.on { background: var(--yh-nav-active-bg); color: var(--yh-nav-active-color); font-weight: 600; }
+@media (max-width: 760px), (pointer: coarse) { .item { min-height: 44px; } }
 </style>

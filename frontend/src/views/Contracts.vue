@@ -24,20 +24,20 @@
     </el-radio-group>
 
     <div class="card table-wrap" v-loading="loading">
-      <el-table v-if="tab !== 'MISSING'" :data="data.rows" size="small">
+      <el-table v-card-list v-if="tab !== 'MISSING'" :data="data.rows" size="small">
         <el-table-column label="员工" min-width="90" fixed>
-          <template #default="{ row }"><router-link :to="`/people/${row.userId}`">{{ row.employee?.name }}</router-link></template>
+          <template v-slot="{ row }"><router-link :to="`/people/${row.userId}`">{{ row.employee?.name }}</router-link></template>
         </el-table-column>
-        <el-table-column label="部门" min-width="140"><template #default="{ row }">{{ row.employee?.deptPath }}</template></el-table-column>
-        <el-table-column label="类型" min-width="110"><template #default="{ row }">{{ row.kindLabel }}{{ row.title ? ` · ${row.title}` : '' }}</template></el-table-column>
+        <el-table-column label="部门" min-width="140"><template v-slot="{ row }">{{ row.employee?.deptPath }}</template></el-table-column>
+        <el-table-column label="类型" min-width="110"><template v-slot="{ row }">{{ row.kindLabel }}{{ row.title ? ` · ${row.title}` : '' }}</template></el-table-column>
         <el-table-column label="期限" min-width="190">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <template v-if="row.kind === 'NON_COMPETE'">离职后 {{ row.restrictMonths }} 个月 · {{ yuan(row.monthlyComp) }}/月<div v-if="row.restrictWindow" class="muted small">{{ row.restrictWindow.from }} ~ {{ row.restrictWindow.to }}</div></template>
             <template v-else>{{ row.startDate }} ~ {{ row.endDate || '无固定期限' }}<div v-if="row.probationEnd" class="muted small">试用期至 {{ row.probationEnd }}</div></template>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="120">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <el-tag size="small" :type="CONTRACT_STATUS[row.status]">{{ row.statusLabel }}</el-tag>
             <div v-if="row.status === 'EXPIRING'" class="small warnc">还有 {{ row.daysLeft }} 天</div>
             <div v-if="row.renewed" class="muted small">已续签</div>
@@ -45,7 +45,7 @@
         </el-table-column>
         <el-table-column label="编号" prop="number" min-width="100" />
         <el-table-column label="" width="190" fixed="right">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <a v-if="row.hasFile" :href="`api/contracts/${row.id}/file`" target="_blank" style="margin-right: 10px">文件</a>
             <template v-if="data.canEdit">
               <el-button link type="primary" @click="edit(row)">修改</el-button>
@@ -65,11 +65,11 @@
       </el-table>
       <template v-else>
         <p class="help">这些在职的人没有有效的劳动合同（没录、已到期或已解除）。未签书面劳动合同超过一个月，用人单位要支付双倍工资（劳动合同法第八十二条）。</p>
-        <el-table :data="missing" size="small">
-          <el-table-column label="员工" min-width="100"><template #default="{ row }"><router-link :to="`/people/${row.id}`">{{ row.name }}</router-link></template></el-table-column>
+        <el-table v-card-list :data="missing" size="small">
+          <el-table-column label="员工" min-width="100"><template v-slot="{ row }"><router-link :to="`/people/${row.id}`">{{ row.name }}</router-link></template></el-table-column>
           <el-table-column label="工号" prop="jobNumber" min-width="90" />
           <el-table-column label="部门" prop="deptPath" min-width="180" />
-          <el-table-column label="" width="110"><template #default="{ row }"><el-button link type="primary" @click="openNew(row)">录劳动合同</el-button></template></el-table-column>
+          <el-table-column label="" width="110"><template v-slot="{ row }"><el-button link type="primary" @click="openNew(row)">录劳动合同</el-button></template></el-table-column>
         </el-table>
       </template>
     </div>

@@ -32,21 +32,21 @@
     </div>
 
     <div class="card table-wrap" v-loading="loading">
-      <el-table :data="data.rows" size="small" show-summary :summary-method="sumRow">
+      <el-table v-card-list :data="data.rows" size="small" show-summary :summary-method="sumRow">
         <el-table-column label="员工" min-width="90" fixed>
-          <template #default="{ row }"><router-link :to="`/people/${row.employee.id}`">{{ row.employee.name }}</router-link><ExemptTag :value="row.employee.exemption === 'FULL' ? 'FULL' : null" /></template>
+          <template v-slot="{ row }"><router-link :to="`/people/${row.employee.id}`">{{ row.employee.name }}</router-link><ExemptTag :value="row.employee.exemption === 'FULL' ? 'FULL' : null" /></template>
         </el-table-column>
-        <el-table-column label="部门" min-width="130"><template #default="{ row }">{{ row.employee.deptPath }}</template></el-table-column>
+        <el-table-column label="部门" min-width="130"><template v-slot="{ row }">{{ row.employee.deptPath }}</template></el-table-column>
         <el-table-column v-for="c in columns" :key="c" :label="COST_CATEGORIES[c]" min-width="96" align="right">
-          <template #default="{ row }">
+          <template v-slot="{ row }">
             <span :class="{ link: data.canEdit, auto: row.items[c] && row.items[c].source !== 'MANUAL' && row.items[c].source !== 'IMPORT' }" :title="row.items[c]?.note || ''" @click="data.canEdit && editCell(row, c)">
               {{ row.items[c] ? num(row.items[c].amount) : (data.canEdit ? '＋' : '') }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="合计" min-width="100" align="right" fixed="right"><template #default="{ row }"><b>{{ num(row.total) }}</b></template></el-table-column>
+        <el-table-column label="合计" min-width="100" align="right" fixed="right"><template v-slot="{ row }"><b>{{ num(row.total) }}</b></template></el-table-column>
         <el-table-column v-if="data.canEdit" label="标准月成本" min-width="110" align="right">
-          <template #default="{ row }"><span class="link" @click="editProfile(row)">{{ row.profile ? num(row.profile.total) : '设置' }}</span></template>
+          <template v-slot="{ row }"><span class="link" @click="editProfile(row)">{{ row.profile ? num(row.profile.total) : '设置' }}</span></template>
         </el-table-column>
       </el-table>
     </div>
@@ -83,10 +83,10 @@
       <p v-if="gen.data">要补 <b>{{ gen.data.count }}</b> 个数，合计 {{ yuan(gen.data.total) }}。已经有的数不动。</p>
       <el-alert v-if="gen.data?.noProfile.length" type="warning" :closable="false" style="margin-bottom: 10px"
         :title="`${gen.data.noProfile.length} 人没设标准成本，这次不生成：${gen.data.noProfile.slice(0, 15).map(e => e.name).join('、')}${gen.data.noProfile.length > 15 ? ' …' : ''}`" />
-      <el-table :data="gen.data?.rows || []" size="small" max-height="360">
+      <el-table v-card-list :data="gen.data?.rows || []" size="small" max-height="360">
         <el-table-column label="员工" prop="name" min-width="90" />
-        <el-table-column label="类别" min-width="100"><template #default="{ row }">{{ COST_CATEGORIES[row.category] }}</template></el-table-column>
-        <el-table-column label="金额" min-width="100" align="right"><template #default="{ row }">{{ num(row.amount) }}</template></el-table-column>
+        <el-table-column label="类别" min-width="100"><template v-slot="{ row }">{{ COST_CATEGORIES[row.category] }}</template></el-table-column>
+        <el-table-column label="金额" min-width="100" align="right"><template v-slot="{ row }">{{ num(row.amount) }}</template></el-table-column>
         <el-table-column label="说明" prop="note" min-width="160" />
       </el-table>
       <template #footer>

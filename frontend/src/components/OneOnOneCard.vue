@@ -28,7 +28,7 @@
     <div v-if="r.hasFile || r.sourceChars" class="source small">
       <span class="muted">原始纪要{{ r.parsedBy === 'AI' ? '（纪要和待办由模型整理）' : '' }}：</span>
       <a v-if="r.hasFile" :href="`api/one-on-ones/${r.id}/file`" target="_blank">📎 {{ r.sourceFileName || '原文件' }}</a>
-      <el-button v-if="r.sourceChars" link size="small" type="primary" @click="toggleSource">{{ text != null ? '收起' : `看全文（${r.sourceChars} 字）` }}</el-button>
+      <el-button v-if="r.sourceChars" link type="primary" @click="toggleSource">{{ text != null ? '收起' : `看全文（${r.sourceChars} 字）` }}</el-button>
       <pre v-if="text != null" class="source-text">{{ text }}</pre>
     </div>
   </div>
@@ -62,6 +62,6 @@ async function tick(a, v) {
 .actions { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 .act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .source { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.source-text { flex-basis: 100%; max-height: 320px; overflow: auto; white-space: pre-wrap; font-family: inherit; background: var(--hr-bg); border-radius: 6px; padding: 8px 10px; margin: 0; }
+.source-text { flex-basis: 100%; max-height: 320px; overflow: auto; white-space: pre-wrap; font-family: inherit; background: var(--hr-bg); border-radius: var(--yh-radius-sm); padding: 8px 10px; margin: 0; }
 .done { text-decoration: line-through; color: var(--hr-muted); }
 </style>

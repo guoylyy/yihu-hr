@@ -8,6 +8,7 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   // 资源用相对路径：装在以虎 One 的 /apps/hr/ 下也能用
   base: './',
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
   plugins: [
     vue(),
     AutoImport({ resolvers: [ElementPlusResolver()] }),
@@ -30,7 +31,8 @@ export default defineConfig({
   server: {
     port: 5186,
     proxy: {
-      '/api': { target: process.env.VITE_API_TARGET || 'http://localhost:3006', changeOrigin: true }
+      '/api': { target: process.env.VITE_API_TARGET || 'http://localhost:3006', changeOrigin: true },
+      '/health': { target: process.env.VITE_API_TARGET || 'http://localhost:3006', changeOrigin: true }
     }
   }
 })

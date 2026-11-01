@@ -65,10 +65,10 @@
               <span v-if="r.planTime" class="muted small">应 {{ r.planTime }}</span>
               <el-tag size="small" type="info" disable-transitions>{{ r.sourceLabel }}</el-tag>
               <div v-if="r.location || r.note" class="muted small full">{{ [r.location, r.note].filter(Boolean).join(' · ') }}</div>
-              <el-button v-if="me.hr && r.source === 'MANUAL'" link type="danger" size="small" @click="delPunch(r)">删除</el-button>
+              <el-button v-if="me.hr && r.source === 'MANUAL'" link type="danger" @click="delPunch(r)">删除</el-button>
             </div>
           </div>
-          <el-button v-if="me.hr" size="small" @click="openPatch">补录打卡</el-button>
+          <el-button v-if="me.hr" @click="openPatch">补录打卡</el-button>
         </template>
         <div v-else class="muted small">点日历上的一天看明细：每次打卡的时间、来源、地点，当天的请假和出差。</div>
       </div>
@@ -83,25 +83,25 @@
             <el-radio-button value="punch">打卡（{{ punches.length }}）</el-radio-button>
             <el-radio-button value="absence">请假 / 出差 / 外出（{{ data?.absences.length || 0 }}）</el-radio-button>
           </el-radio-group>
-          <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+          <el-button @click="exportCsv">导出 CSV</el-button>
         </div>
       </div>
       <div class="table-wrap">
-        <el-table v-if="tab === 'punch'" :data="punches" size="small" max-height="460">
-          <el-table-column label="日期" min-width="100"><template #default="{ row }">{{ row.date.slice(5) }} 周{{ weekdayOf(row.date) }}</template></el-table-column>
-          <el-table-column label="类型" min-width="56"><template #default="{ row }">{{ KIND[row.kind] || row.kind }}</template></el-table-column>
-          <el-table-column label="打卡时间" min-width="76"><template #default="{ row }"><b>{{ row.time || '—' }}</b></template></el-table-column>
+        <el-table v-card-list v-if="tab === 'punch'" :data="punches" size="small" max-height="460">
+          <el-table-column label="日期" min-width="100"><template v-slot="{ row }">{{ row.date.slice(5) }} 周{{ weekdayOf(row.date) }}</template></el-table-column>
+          <el-table-column label="类型" min-width="56"><template v-slot="{ row }">{{ KIND[row.kind] || row.kind }}</template></el-table-column>
+          <el-table-column label="打卡时间" min-width="76"><template v-slot="{ row }"><b>{{ row.time || '—' }}</b></template></el-table-column>
           <el-table-column label="应打卡" prop="planTime" min-width="70" />
-          <el-table-column label="结果" min-width="80"><template #default="{ row }"><span :class="row.result === 'NORMAL' ? '' : 'bad'">{{ FLAG[row.result] || row.result }}</span></template></el-table-column>
+          <el-table-column label="结果" min-width="80"><template v-slot="{ row }"><span :class="row.result === 'NORMAL' ? '' : 'bad'">{{ FLAG[row.result] || row.result }}</span></template></el-table-column>
           <el-table-column label="来源" prop="sourceLabel" min-width="80" />
-          <el-table-column label="地点 / 说明" min-width="200"><template #default="{ row }">{{ [row.location, row.note].filter(Boolean).join(' · ') }}</template></el-table-column>
+          <el-table-column label="地点 / 说明" min-width="200"><template v-slot="{ row }">{{ [row.location, row.note].filter(Boolean).join(' · ') }}</template></el-table-column>
         </el-table>
-        <el-table v-else :data="data?.absences || []" size="small" max-height="460">
-          <el-table-column label="类别" min-width="60"><template #default="{ row }">{{ row.categoryLabel }}</template></el-table-column>
-          <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ row.typeName || '—' }}</template></el-table-column>
-          <el-table-column label="时间" min-width="230"><template #default="{ row }">{{ span(row) }}</template></el-table-column>
-          <el-table-column label="时长" min-width="90"><template #default="{ row }">{{ row.reportedDays != null ? days(row.reportedDays) + ' 天' : row.hours != null ? row.hours + ' 小时' : '' }}</template></el-table-column>
-          <el-table-column label="计入工作日" min-width="90"><template #default="{ row }">{{ days(row.workDays) }} 天</template></el-table-column>
+        <el-table v-card-list v-else :data="data?.absences || []" size="small" max-height="460">
+          <el-table-column label="类别" min-width="60"><template v-slot="{ row }">{{ row.categoryLabel }}</template></el-table-column>
+          <el-table-column label="类型" min-width="80"><template v-slot="{ row }">{{ row.typeName || '—' }}</template></el-table-column>
+          <el-table-column label="时间" min-width="230"><template v-slot="{ row }">{{ span(row) }}</template></el-table-column>
+          <el-table-column label="时长" min-width="90"><template v-slot="{ row }">{{ row.reportedDays != null ? days(row.reportedDays) + ' 天' : row.hours != null ? row.hours + ' 小时' : '' }}</template></el-table-column>
+          <el-table-column label="计入工作日" min-width="90"><template v-slot="{ row }">{{ days(row.workDays) }} 天</template></el-table-column>
           <el-table-column label="来源" prop="sourceLabel" min-width="80" />
         </el-table>
       </div>
@@ -202,7 +202,7 @@ async function delPunch(r) {
 .strip .warn b { color: var(--hr-warn); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
 .cal-card { padding: 12px; }
-.day-card { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.day-card { position: sticky; top: calc(var(--yh-header-h) + 12px); display: flex; flex-direction: column; gap: 10px; }
 .day-card h3 { margin: 0; }
 .between { justify-content: space-between; }
 .kv { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 8px; align-items: baseline; font-variant-numeric: tabular-nums; }
@@ -214,14 +214,14 @@ async function delPunch(r) {
 .full { flex-basis: 100%; }
 .ok { color: var(--hr-ok); }
 .bad { color: var(--hr-danger); }
-.chip { font-size: 12px; line-height: 20px; padding: 0 6px; border-radius: 4px; }
+.chip { font-size: 12px; line-height: 20px; padding: 0 6px; border-radius: var(--yh-radius-sm); }
 .chip.leave { background: var(--el-color-primary-light-8); color: var(--el-color-primary-dark-2); }
-.chip.trip { background: #ede9fe; color: #6d28d9; }
-.chip.out { background: #e0f2fe; color: #0369a1; }
+.chip.trip { background: var(--yh-highlight-soft); color: var(--hr-accent); }
+.chip.out { background: var(--hr-surface); color: var(--hr-accent); outline: 1px solid var(--yh-accent-light); outline-offset: -1px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
 .dot.ok { background: var(--hr-ok); } .dot.bad { background: var(--hr-danger); } .dot.warn { background: var(--hr-warn); }
-.dot.leave { background: var(--el-color-primary-light-3); } .dot.trip { background: #8b5cf6; } .dot.out { background: #0ea5e9; }
+.dot.leave { background: var(--el-color-primary-light-3); } .dot.trip { background: var(--hr-accent); } .dot.out { background: var(--yh-accent-light); }
 .month-pick :deep(.el-input__wrapper) { border-radius: 0; }
 @media (max-width: 1100px) {
   .layout { grid-template-columns: minmax(0, 1fr); }

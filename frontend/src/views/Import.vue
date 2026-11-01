@@ -45,7 +45,7 @@
       <div v-if="result.columns" class="card">
         <div class="toolbar between">
           <h3>列对应</h3>
-          <el-button size="small" :loading="busy" @click="analyzeFile(mapping)">按这个对应重新识别</el-button>
+          <el-button :loading="busy" @click="analyzeFile(mapping)">按这个对应重新识别</el-button>
         </div>
         <div class="cols">
           <div v-for="(c, i) in result.columns" :key="i" class="col">
@@ -71,19 +71,19 @@
         <el-alert v-if="counts.confirm" type="warning" :closable="false" style="margin-bottom: 10px">
           <template #title>
             {{ counts.confirm }} 行的名字和平台上不完全一样（带备注、称呼、拼音、同音字……），给了最像的人，请确认是不是同一个人。确认过的名字会记住，下次直接认。
-            <el-button size="small" style="margin-left: 8px" @click="acceptAll">全部采用建议</el-button>
+            <el-button style="margin-left: 8px" @click="acceptAll">全部采用建议</el-button>
           </template>
         </el-alert>
         <div class="table-wrap">
-          <el-table :data="shown" size="small" row-key="row" max-height="560" :row-class-name="({ row }) => (dupOf(row) ? 'dup-row' : '')">
+          <el-table v-card-list :data="shown" size="small" row-key="row" max-height="560" :row-class-name="({ row }) => (dupOf(row) ? 'dup-row' : '')">
             <el-table-column width="40">
               <template #header><el-checkbox :model-value="allIncluded" :indeterminate="counts.included > 0 && !allIncluded" @change="toggleAll" /></template>
-              <template #default="{ row }"><el-checkbox v-model="row.include" :disabled="!row.confirmed || !changesOf(row).length" /></template>
+              <template v-slot="{ row }"><el-checkbox v-model="row.include" :disabled="!row.confirmed || !changesOf(row).length" /></template>
             </el-table-column>
             <el-table-column label="行" prop="row" width="50" />
-            <el-table-column label="表里的人" min-width="110"><template #default="{ row }">{{ row.who.name }}<span v-if="row.who.jobNumber" class="muted small"> {{ row.who.jobNumber }}</span></template></el-table-column>
+            <el-table-column label="表里的人" min-width="110"><template v-slot="{ row }">{{ row.who.name }}<span v-if="row.who.jobNumber" class="muted small"> {{ row.who.jobNumber }}</span></template></el-table-column>
             <el-table-column label="对应员工" min-width="250">
-              <template #default="{ row }">
+              <template v-slot="{ row }">
                 <template v-if="row.status === 'auto'">
                   {{ row.employee.name }} <span class="muted small">{{ row.employee.deptPath }} · 按{{ row.method }}</span>
                 </template>
@@ -95,7 +95,7 @@
                       </el-option>
                       <el-option :value="0" label="都不是，我自己选…" />
                     </el-select>
-                    <el-button v-if="!row.confirmed && row.pick" size="small" type="primary" plain @click="confirmRow(row)">是他</el-button>
+                    <el-button v-if="!row.confirmed && row.pick" type="primary" plain @click="confirmRow(row)">是他</el-button>
                     <el-tag v-else-if="row.confirmed && row.pick" size="small" type="success" disable-transitions>已确认</el-tag>
                   </div>
                   <div v-if="cand(row)" class="muted small">{{ cand(row).reason }}</div>
@@ -110,7 +110,7 @@
               </template>
             </el-table-column>
             <el-table-column label="要改的" min-width="360">
-              <template #default="{ row }">
+              <template v-slot="{ row }">
                 <div class="changes">
                   <span v-for="c in changesOf(row)" :key="c.field" class="chg" :title="c.derived ? `按「${c.derived}」推算` : ''">
                     <b>{{ c.label }}</b> <template v-if="!manualOnly(row)"><span class="muted">{{ c.fromText ?? '空' }}</span> → </template><span class="to">{{ c.toText }}</span><span v-if="c.derived" class="muted">（推算）</span>

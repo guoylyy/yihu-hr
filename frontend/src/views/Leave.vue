@@ -27,12 +27,12 @@
     <div class="card">
       <h3>请假、出差、外出记录</h3>
       <div class="table-wrap">
-        <el-table v-loading="loading" :data="list" size="small">
-          <el-table-column label="类别" min-width="60"><template #default="{ row }">{{ row.categoryLabel }}</template></el-table-column>
-          <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ row.typeName || '—' }}</template></el-table-column>
-          <el-table-column label="时间" min-width="230"><template #default="{ row }">{{ span(row) }}</template></el-table-column>
-          <el-table-column label="时长" min-width="80"><template #default="{ row }">{{ row.reportedDays != null ? days(row.reportedDays) + ' 天' : row.hours != null ? row.hours + ' 小时' : '' }}</template></el-table-column>
-          <el-table-column label="计入工作日" min-width="90"><template #default="{ row }">{{ days(row.workDays) }} 天</template></el-table-column>
+        <el-table v-card-list v-loading="loading" :data="list" size="small">
+          <el-table-column label="类别" min-width="60"><template v-slot="{ row }">{{ row.categoryLabel }}</template></el-table-column>
+          <el-table-column label="类型" min-width="80"><template v-slot="{ row }">{{ row.typeName || '—' }}</template></el-table-column>
+          <el-table-column label="时间" min-width="230"><template v-slot="{ row }">{{ span(row) }}</template></el-table-column>
+          <el-table-column label="时长" min-width="80"><template v-slot="{ row }">{{ row.reportedDays != null ? days(row.reportedDays) + ' 天' : row.hours != null ? row.hours + ' 小时' : '' }}</template></el-table-column>
+          <el-table-column label="计入工作日" min-width="90"><template v-slot="{ row }">{{ days(row.workDays) }} 天</template></el-table-column>
           <el-table-column label="来源" prop="sourceLabel" min-width="80" />
         </el-table>
       </div>
@@ -40,10 +40,10 @@
     </div>
 
     <el-drawer v-model="ledger.open" :title="`${ledger.title} · 余额明细`" size="min(520px, 100vw)">
-      <el-table :data="ledger.rows" size="small">
-        <el-table-column label="时间" min-width="140"><template #default="{ row }">{{ fmtTime(row.createdAt) }}</template></el-table-column>
-        <el-table-column label="类型" min-width="80"><template #default="{ row }">{{ LEDGER_KIND[row.kind] || row.kind }}</template></el-table-column>
-        <el-table-column label="天数" min-width="60"><template #default="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ days(row.delta) }}</template></el-table-column>
+      <el-table v-card-list :data="ledger.rows" size="small">
+        <el-table-column label="时间" min-width="140"><template v-slot="{ row }">{{ fmtTime(row.createdAt) }}</template></el-table-column>
+        <el-table-column label="类型" min-width="80"><template v-slot="{ row }">{{ LEDGER_KIND[row.kind] || row.kind }}</template></el-table-column>
+        <el-table-column label="天数" min-width="60"><template v-slot="{ row }">{{ row.delta > 0 ? '+' : '' }}{{ days(row.delta) }}</template></el-table-column>
         <el-table-column label="说明" prop="note" min-width="160" />
       </el-table>
     </el-drawer>
